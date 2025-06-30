@@ -12,6 +12,7 @@ export default function TabLayout() {
           if (route.name === 'home') iconName = 'home';
           if (route.name === 'swap') iconName = 'repeat';
           if (route.name === 'settings') iconName = 'settings';
+          if (route.name === 'myswaps') iconName = 'swap-horizontal';
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -22,6 +23,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="home" />
       <Tabs.Screen name="swap" />
+      <Tabs.Screen name="myswaps" options={{ title: 'My Swaps' }} />
       <Tabs.Screen name="settings" />
     </Tabs>
   );

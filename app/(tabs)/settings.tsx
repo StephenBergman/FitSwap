@@ -31,14 +31,14 @@ export default function SettingsScreen() {
       console.error('Logout error:', error.message);
       return;
     }
-    router.replace('/login'); // or wherever your login screen is
+    router.replace('/login'); 
   };
 
   const toggleDarkMode = () => {
-    // Placeholder – to make it persistent you'd need Context or async storage
+    // Placeholder 
     const newMode = !darkMode;
     setDarkMode(newMode);
-    // Optionally: persist preference
+    
   };
 
   return (

@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 
@@ -65,7 +65,7 @@ export default function WishlistScreen() {
         style={styles.card}
         onPress={() =>
           router.push({
-            pathname: '/product/[id]',
+            pathname: '/product/[ProductId]',
             params: { id: item.item_id }
           })
         }

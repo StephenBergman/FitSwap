@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,10 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View
-} from 'react-native'
-import { supabase } from '../../lib/supabase'
+} from 'react-native';
+import RequestSwapButton from '../../components/swap/RequestSwapButton';
+import AddToWishlistButton from '../../components/wishlist/AddToWishlistButton';
+import { supabase } from '../../lib/supabase';
 
 type Item = {
   id: string
@@ -22,22 +23,22 @@ type Item = {
 }
 
 export default function ProductDetailsScreen() {
-  const { id } = useLocalSearchParams()
+  const { ProductId } = useLocalSearchParams()
   const router = useRouter()
   const navigation = useNavigation()
   const [item, setItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (id) fetchItem()
-  }, [id])
+    if (ProductId) fetchItem()
+  }, [ProductId])
 
   const fetchItem = async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('items')
       .select('*')
-      .eq('id', id)
+      .eq('id', ProductId)
       .single()
 
     if (error) {
@@ -50,31 +51,6 @@ export default function ProductDetailsScreen() {
     }
 
     setLoading(false)
-  }
-
-  const handleAddToWishlist = async () => {
-    if (typeof id !== 'string') return
-
-    const {
-      data: { user },
-      error: authError
-    } = await supabase.auth.getUser()
-
-    if (authError || !user?.id) {
-      Alert.alert('Authentication error', 'Could not get user ID.')
-      return
-    }
-
-    const { error } = await supabase.from('wishlist').insert({
-      user_id: user.id,
-      item_id: id
-    })
-
-    if (error) {
-      Alert.alert('Error', error.message)
-    } else {
-      Alert.alert('Success', 'Added to wishlist!')
-    }
   }
 
   const handleSwapNow = () => {
@@ -101,17 +77,9 @@ export default function ProductDetailsScreen() {
       <Text style={styles.description}>{item.description}</Text>
       <Text style={styles.tradeLabel}>Looking to trade for:</Text>
       <Text style={styles.tradeText}>{item.trade_for || 'Not specified'}</Text>
+      {item?.id && <RequestSwapButton itemId={item.id} />}
 
-      <TouchableOpacity style={styles.button} onPress={handleSwapNow}>
-        <Text style={styles.buttonText}>Request Swap</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#555', marginTop: 10 }]}
-        onPress={handleAddToWishlist}
-      >
-        <Text style={styles.buttonText}>❤️ Add to Wishlist</Text>
-      </TouchableOpacity>
+{item?.id && <AddToWishlistButton itemId={item.id} />}
     </ScrollView>
   )
 }

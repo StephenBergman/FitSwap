@@ -1,36 +1,38 @@
-// app/login.tsx
+// app/register.tsx
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
-export default function LoginScreen() {
+
+export default function RegisterScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in both fields');
+      Alert.alert('Error', 'Email and password are required');
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
 
     if (error) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert('Registration Failed', error.message);
     } else {
-      router.replace('/home');
-    }
-  };
+      Alert.alert('Success', 'Check your email to confirm your account.');
+      router.replace('/auth/login');
 
-  const goToRegister = () => {
-    router.push('/register');
+    }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login to FitSwap</Text>
+      <Text style={styles.title}>Create an Account</Text>
 
       <TextInput
         style={styles.input}
@@ -41,6 +43,7 @@ export default function LoginScreen() {
         value={email}
         onChangeText={setEmail}
       />
+
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -50,12 +53,8 @@ export default function LoginScreen() {
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Log In</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.secondaryButton} onPress={goToRegister}>
-        <Text style={styles.secondaryText}>Don't have an account? Register</Text>
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
+        <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
     </View>
   );
@@ -89,7 +88,7 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     height: 48,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -99,12 +98,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '500',
-  },
-  secondaryButton: {
-    marginTop: 20,
-  },
-  secondaryText: {
-    color: '#007AFF',
-    fontSize: 16,
   },
 });

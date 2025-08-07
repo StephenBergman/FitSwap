@@ -54,7 +54,7 @@ export default function MySwapsScreen() {
       <Text style={styles.label}>Message:</Text>
       <Text style={styles.value}>{item.message}</Text>
 
-      <TouchableOpacity onPress={() => router.push(`/swaps/[id]`)}>
+      <TouchableOpacity onPress={() => router.push(`/swaps/[Swapsid]`)}>
         <Text style={styles.link}>View Details</Text>
       </TouchableOpacity>
     </View>

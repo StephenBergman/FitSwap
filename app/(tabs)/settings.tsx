@@ -31,7 +31,7 @@ export default function SettingsScreen() {
       console.error('Logout error:', error.message);
       return;
     }
-    router.replace('/login'); 
+    router.replace('/auth/login'); 
   };
 
   const toggleDarkMode = () => {

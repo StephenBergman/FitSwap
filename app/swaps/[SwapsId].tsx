@@ -1,7 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+
 import { supabase } from '../../lib/supabase';
+
 
 export default function SwapDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -19,7 +21,7 @@ export default function SwapDetailScreen() {
           status,
           item_id,
           offered_item_id,
-          items: item_id ( title, image_url, trade_for ),
+          item: item_id ( id, title, image_url, trade_for ),
           offered_item: offered_item_id ( title, image_url )
         `
         )
@@ -32,12 +34,20 @@ export default function SwapDetailScreen() {
       } else {
         setSwap(data);
       }
+if (error) {
+  console.error(error);
+  Alert.alert('Error', 'Failed to load swap details');
+} else {
+  console.log('swap', data); 
+  setSwap(data);
+  
+}
 
       setLoading(false);
     };
 
     if (id) fetchSwap();
-  }, [id]);
+  }, [SwapId]);
 
   if (loading) {
     return (
@@ -54,22 +64,28 @@ export default function SwapDetailScreen() {
       </View>
     );
   }
+console.log('swap.items:', swap.item);
+console.log('swap.items.id:', swap.item?.id);
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Swap Request</Text>
-      <Text>Status: {swap.status}</Text>
-      <Text>Message: {swap.message}</Text>
 
-      <Text style={styles.section}>Requested Item:</Text>
-      <Text>Title: {swap.items?.title}</Text>
-      <Text>Looking for: {swap.items?.trade_for}</Text>
 
-      <Text style={styles.section}>Offered Item:</Text>
-      <Text>Title: {swap.offered_item?.title}</Text>
-    </View>
-  );
+
+return (
+  <View style={styles.container}>
+    <Text style={styles.title}>Swap Request</Text>
+    <Text>Status: {swap.status}</Text>
+    <Text>Message: {swap.message}</Text>
+
+    <Text style={styles.section}>Requested Item:</Text>
+    <Text>Title: {swap.item?.title}</Text>
+    <Text>Looking for: {swap.item?.trade_for}</Text>
+    <Text style={styles.section}>Offered Item:</Text>
+    <Text>Title: {swap.offered_item?.title}</Text>
+    <Text>Image: {swap.offered_item?.image_url}</Text>
+  </View>
+);
 }
+
 
 const styles = StyleSheet.create({
   container: {

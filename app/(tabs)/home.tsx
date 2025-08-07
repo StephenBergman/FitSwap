@@ -1,13 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
@@ -38,38 +37,36 @@ export default function HomeScreen() {
     setLoading(false);
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/product/${item.id}`)}
-    >
-      <Image
-        source={{
-          uri: item.image_url || 'https://via.placeholder.com/300x200.png?text=No+Image',
-        }}
-        style={styles.image}
-        resizeMode="cover"
-      />
-      <Text style={styles.title}>{item.title}</Text>
+const renderItem = ({ item }: { item: any }) => (
+  <TouchableOpacity
+    style={styles.card}
+    onPress={() => router.push(`/product/${item.id}`)}
+    activeOpacity={0.85}
+  >
+    <Image
+      source={{
+        uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image',
+      }}
+      style={styles.image}
+      resizeMode="contain"
+    />
+    <View style={styles.cardContent}>
+      <Text style={styles.title} numberOfLines={1}>
+        {item.title}
+      </Text>
       <Text style={styles.description} numberOfLines={2}>
         {item.description}
       </Text>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
 
   return (
     <FlatList
       data={items}
       keyExtractor={(item) => item.id.toString()}
-      numColumns={2}
+      numColumns={6}
       renderItem={renderItem}
       contentContainerStyle={styles.list}
       ListEmptyComponent={
@@ -86,7 +83,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   list: {
-    padding: 12,
+    padding: 8,
+    paddingBottom: 100,
   },
   emptyText: {
     textAlign: 'center',
@@ -95,29 +93,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   card: {
+    alignItems: 'center',
     flex: 1,
-    margin: 6,
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
+    margin: 1,
     overflow: 'hidden',
-    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
+    elevation: 2,
+    maxWidth: '20%',
+    maxHeight: '100%',
   },
   image: {
     width: '100%',
-    aspectRatio: 1, // Keeps image square
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    height: 220, // Taller image to show product better
+    backgroundColor: '#f0f0f0',
+    aspectRatio: 3/4,
+    alignSelf: 'stretch',
+  },
+  cardContent: {
+    width: '100%',
+    alignItems: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   title: {
-    paddingHorizontal: 10,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginTop: 8,
+    color: '#222',
   },
   description: {
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+    marginTop: 4,
   },
 });
+

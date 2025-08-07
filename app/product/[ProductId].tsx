@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 10,
     marginBottom: 20,
-    resizeMode: 'cover'
+    resizeMode: 'contain'
   },
   title: {
     fontSize: 24,

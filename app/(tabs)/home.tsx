@@ -1,24 +1,31 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
   Platform,
+  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
-function HomeBanner({ onExplore, onListItem }: { onExplore: () => void; onListItem: () => void }) {
+function HomeBanner({
+  onExplore,
+  onListItem,
+}: {
+  onExplore: () => void;
+  onListItem: () => void;
+}) {
   return (
     <View style={styles.banner}>
-      {/* Decorative blobs */}
       <View style={styles.blobA} />
       <View style={styles.blobB} />
 
-      {/* Centered content */}
       <View style={styles.bannerInner}>
         <Text style={styles.brand}>FitSwap</Text>
         <Text style={styles.tagline}>
@@ -35,7 +42,6 @@ function HomeBanner({ onExplore, onListItem }: { onExplore: () => void; onListIt
           </TouchableOpacity>
         </View>
 
-        {/* Mini highlights like SHEIN strips */}
         <View style={styles.badgesRow}>
           <View style={styles.badge}><Text style={styles.badgeText}>No fees</Text></View>
           <View style={styles.badge}><Text style={styles.badgeText}>Local & mail-in</Text></View>
@@ -49,6 +55,7 @@ function HomeBanner({ onExplore, onListItem }: { onExplore: () => void; onListIt
 export default function HomeScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { width } = useWindowDimensions();
   const router = useRouter();
 
   useEffect(() => {
@@ -70,6 +77,20 @@ export default function HomeScreen() {
     setLoading(false);
   };
 
+  // Responsive columns for web & mobile
+  const numColumns = useMemo(() => {
+    if (Platform.OS === 'web') {
+      if (width >= 1400) return 6;
+      if (width >= 1200) return 5;
+      if (width >= 992)  return 4;
+      if (width >= 768)  return 3;
+      return 2;
+    }
+    if (width >= 900) return 4;
+    if (width >= 600) return 3;
+    return 2;
+  }, [width]);
+
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.card}
@@ -77,9 +98,7 @@ export default function HomeScreen() {
       activeOpacity={0.85}
     >
       <Image
-        source={{
-          uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image',
-        }}
+        source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
         style={styles.image}
         resizeMode="contain"
       />
@@ -91,22 +110,27 @@ export default function HomeScreen() {
   );
 
   return (
-    <FlatList
-      data={items}
-      keyExtractor={(item) => item.id.toString()}
-      numColumns={6}
-      renderItem={renderItem}
-      contentContainerStyle={styles.list}
-      ListHeaderComponent={
-        <HomeBanner
-          onExplore={() => router.push('/')}
-          onListItem={() => router.push('/swap')} // change to your "create item" route if different
-        />
-      }
-      ListEmptyComponent={
-        <Text style={styles.emptyText}>No items found. Try uploading some!</Text>
-      }
-    />
+    <SafeAreaView style={{ flex: 1 }}>
+      {/* Banner rendered outside the FlatList so it reliably shows on iOS/Android */}
+      <HomeBanner
+        onExplore={() => router.push('/home')}
+        onListItem={() => router.push('/swap')}
+      />
+
+      <FlatList
+        key={`grid-${numColumns}`}
+        data={items}
+        keyExtractor={(item) => String(item.id)}
+        numColumns={numColumns}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No items found. Try uploading some!</Text>
+        }
+        showsVerticalScrollIndicator={false}
+      />
+    </SafeAreaView>
   );
 }
 
@@ -114,7 +138,7 @@ const styles = StyleSheet.create({
   // --- Banner ---
   banner: {
     position: 'relative',
-    backgroundColor: '#FFF4F7', // soft, feminine base
+    backgroundColor: '#FFF4F7',
     borderRadius: 16,
     paddingVertical: 24,
     marginHorizontal: Platform.select({ web: 4, default: 8 }),
@@ -148,7 +172,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: '#06B6D4', // teal-ish
+    backgroundColor: '#06B6D4',
   },
   ctaPrimaryText: {
     color: '#fff',
@@ -190,7 +214,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 999,
-    backgroundColor: '#FDE68A55', // warm accent
+    backgroundColor: '#FDE68A55',
     top: -60,
     right: -40,
   },
@@ -199,15 +223,16 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 999,
-    backgroundColor: '#5EEAD455', // teal accent
+    backgroundColor: '#5EEAD455',
     bottom: -50,
     left: -30,
   },
 
   // --- List/Grid ---
   list: {
-    padding: 8,
+    paddingHorizontal: 8,
     paddingBottom: 100,
+    gap: 6,
   },
   emptyText: {
     textAlign: 'center',
@@ -218,7 +243,6 @@ const styles = StyleSheet.create({
 
   // --- Cards ---
   card: {
-    alignItems: 'center',
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -229,14 +253,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 3,
     elevation: 2,
-    maxWidth: '20%',
-    maxHeight: '100%',
+    
   },
   image: {
     width: '100%',
-    height: 220,
-    backgroundColor: '#f0f0f0',
+    height: undefined,
     aspectRatio: 3 / 4,
+    backgroundColor: '#f0f0f0',
     alignSelf: 'stretch',
   },
   cardContent: {

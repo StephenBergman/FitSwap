@@ -1,4 +1,5 @@
 // app/(tabs)/settings.tsx
+import DevPanel from '@/components/dev/devpanel';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -57,7 +58,9 @@ export default function SettingsScreen() {
       <TouchableOpacity style={styles.redButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
+      <DevPanel style={{ marginBottom: 12 }} />
     </View>
+
   );
 }
 
@@ -107,4 +110,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: 'bold',
   },
+
+  
 });

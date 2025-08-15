@@ -1,5 +1,4 @@
 // app/(tabs)/settings.tsx
-import DevPanel from '@/components/dev/devpanel';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -11,6 +10,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import DevPanel from '../../components/dev/devpanel';
 import { supabase } from '../../lib/supabase';
 
 export default function SettingsScreen() {

@@ -1,3 +1,4 @@
+// app/product/[ProductId].tsx
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -7,129 +8,176 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
-import RequestSwapButton from '../../components/swap/RequestSwapButton';
 import AddToWishlistButton from '../../components/wishlist/AddToWishlistButton';
 import { supabase } from '../../lib/supabase';
+import { useColors } from '../../lib/theme';
 
 type Item = {
-  id: string
-  title: string
-  description: string
-  image_url: string
-  trade_for: string
-  user_id: string
-}
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  trade_for: string | null;
+  user_id: string;
+};
 
 export default function ProductDetailsScreen() {
-  const { ProductId } = useLocalSearchParams()
-  const router = useRouter()
-  const navigation = useNavigation()
-  const [item, setItem] = useState<Item | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { ProductId } = useLocalSearchParams<{ ProductId?: string }>();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const c = useColors();
+
+  const [item, setItem] = useState<Item | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (ProductId) fetchItem()
-  }, [ProductId])
+    if (ProductId) fetchItem();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ProductId]);
 
   const fetchItem = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('id', ProductId)
-      .single()
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('items')
+        .select('*')
+        .eq('id', ProductId)
+        .single();
 
-    if (error) {
-      console.error('Error fetching item:', error.message)
-      Alert.alert('Error', error.message)
-    } else {
-      setItem(data)
-      // Set header title to item title
-      navigation.setOptions({ title: data.title })
+      if (error) {
+        console.error('Error fetching item:', error.message);
+        Alert.alert('Error', error.message);
+        return;
+      }
+
+      setItem(data as Item);
+      navigation.setOptions({ title: data.title });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false)
-  }
+  };
 
   const handleSwapNow = () => {
-    if (!item) return
-
-    router.push({
-      pathname: '/offer/offerscreen',
-      params: { id: item.id }
-    })
-  }
+    if (!item) return;
+    router.push({ pathname: '/offer/offerscreen', params: { id: item.id } });
+  };
 
   if (loading || !item) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={[styles.loadingContainer, { backgroundColor: c.bg }]}>
+        <ActivityIndicator size="large" color={c.tint} />
       </View>
-    )
+    );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Image source={{ uri: item.image_url }} style={styles.image} />
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.description}>{item.description}</Text>
-      <Text style={styles.tradeLabel}>Looking to trade for:</Text>
-      <Text style={styles.tradeText}>{item.trade_for || 'Not specified'}</Text>
-      {item?.id && <RequestSwapButton itemId={item.id} />}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={{ padding: 16 }}
+    >
+      <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[styles.imageWrap, { backgroundColor: c.card }]}>
+          <Image
+            source={{
+              uri:
+                item.image_url ||
+                'https://via.placeholder.com/600x800.png?text=No+Image',
+            }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+        </View>
 
-{item?.id && <AddToWishlistButton itemId={item.id} />}
+        <Text style={[styles.title, { color: c.text }]}>{item.title}</Text>
+
+        {!!item.description && (
+          <Text style={[styles.description, { color: c.muted }]}>{item.description}</Text>
+        )}
+
+        <Text style={[styles.tradeLabel, { color: c.text }]}>Looking to trade for:</Text>
+        <Text style={[styles.tradeText, { color: c.tint }]} numberOfLines={2}>
+          {item.trade_for || 'Not specified'}
+        </Text>
+
+        <View style={styles.actions}>
+          {/* Primary action */}
+          <View style={{ width: '100%' }}>
+            <Text
+              onPress={handleSwapNow}
+              style={[styles.primaryBtn, { backgroundColor: c.tint }]}
+            >
+              Request a swap
+            </Text>
+          </View>
+
+          {/* Secondary action */}
+          <View style={{ width: '100%' }}>
+            <AddToWishlistButton itemId={item.id} />
+          </View>
+        </View>
+      </View>
     </ScrollView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  card: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+  },
+
+  imageWrap: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center'
+    marginBottom: 16,
   },
-  container: {
-    padding: 20,
-    backgroundColor: '#fff'
-  },
+
   image: {
     width: '100%',
-    height: 300,
-    borderRadius: 10,
-    marginBottom: 20,
-    resizeMode: 'contain'
+    aspectRatio: 3 / 4, 
   },
+
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12
+    fontWeight: '800',
+    marginBottom: 8,
   },
+
   description: {
     fontSize: 16,
-    marginBottom: 20,
-    color: '#333'
+    marginBottom: 18,
   },
+
   tradeLabel: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
   },
+
   tradeText: {
     fontSize: 16,
-    color: '#007AFF',
-    marginBottom: 30
+    marginBottom: 20,
   },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center'
+
+  actions: {
+    marginTop: 4,
+    gap: 10,
   },
-  buttonText: {
+
+  primaryBtn: {
+    textAlign: 'center',
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 16
-  }
-})
+    fontWeight: '700',
+    paddingVertical: 14,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+});

@@ -2,56 +2,88 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  DeviceEventEmitter,
   FlatList,
   Image,
   Platform,
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { useColors } from '../../lib/theme';
 
-/* ---------------- Banner (unchanged) ---------------- */
+
+/* ---------------- Banner ---------------- */
 function HomeBanner({
   onExplore,
   onListItem,
-}: {
+}: 
+{
   onExplore: () => void;
   onListItem: () => void;
 }) {
+
+  const c = useColors();
   return (
-    <View style={styles.banner}>
-      <View style={styles.blobA} />
-      <View style={styles.blobB} />
+    <View
+      style={[
+        styles.banner,
+        { backgroundColor: c.card, borderColor: c.border, borderWidth: 1 },
+      ]}
+    >
+      {/* Softer blobs that work in both themes */}
+      <View style={[styles.blobA, { backgroundColor: 'rgba(253,230,138,0.25)' }]} />
+      <View style={[styles.blobB, { backgroundColor: 'rgba(94,234,212,0.22)' }]} />
 
       <View style={styles.bannerInner}>
-        <Text style={styles.brand}>FitSwap</Text>
-        <Text style={styles.tagline}>
+        <Text style={[styles.brand, { color: c.text }]}>FitSwap</Text>
+        <Text style={[styles.tagline, { color: c.muted }]}>
           Trade outfits you love. Zero cost. Zero clutter.
         </Text>
 
         <View style={styles.ctaRow}>
-          <TouchableOpacity style={styles.ctaPrimary} onPress={onExplore} activeOpacity={0.9}>
+          <TouchableOpacity
+            style={[styles.ctaPrimary, { backgroundColor: c.tint }]}
+            onPress={onExplore}
+            activeOpacity={0.9}
+          >
             <Text style={styles.ctaPrimaryText}>Explore swaps</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.ctaGhost} onPress={onListItem} activeOpacity={0.9}>
-            <Text style={styles.ctaGhostText}>List an item</Text>
+          <TouchableOpacity
+            style={[styles.ctaGhost, { borderColor: c.tint }]}
+            onPress={onListItem}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.ctaGhostText, { color: c.tint }]}>List an item</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.badgesRow}>
-          <View style={styles.badge}><Text style={styles.badgeText}>No fees</Text></View>
-          <View style={styles.badge}><Text style={styles.badgeText}>Local & mail-in</Text></View>
-          <View style={styles.badge}><Text style={styles.badgeText}>Sustainable</Text></View>
+          <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
+            <Text style={[styles.badgeText, { color: c.muted }]}>No fees</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
+            <Text style={[styles.badgeText, { color: c.muted }]}>Local & mail-in</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
+            <Text style={[styles.badgeText, { color: c.muted }]}>Sustainable</Text>
+          </View>
         </View>
       </View>
     </View>
   );
 }
+
+
+
+
+
 
 /* ---------------- Home ---------------- */
 type ItemRow = {
@@ -62,8 +94,22 @@ type ItemRow = {
 };
 
 export default function HomeScreen() {
+  const c = useColors();
+  const [query, setQuery] = useState(''); // What user types
+  const [debouncedQuery, setDebouncedQuery] = useState(''); // Delayed copy
+  const [sort, setSort] = useState<'newest' | 'oldest'>('newest'); //Sort order
   const [items, setItems] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // Filters (client-side)
+  const [onlyWishlisted, setOnlyWishlisted] = useState(false);
+  const [withImagesOnly, setWithImagesOnly] = useState(false);
+
+
+  useEffect(() => {
+
+    const id = setTimeout(() => setDebouncedQuery(query.trim()), 400);
+    return () => clearTimeout(id);
+  }, [query]);
 
   // wishlist lookup map: { [itemId]: true }
   const [wish, setWish] = useState<Record<string, boolean>>({});
@@ -72,20 +118,40 @@ export default function HomeScreen() {
   const router = useRouter();
 
   /* Load items */
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .order('created_at', { ascending: false });
+ const fetchItems = useCallback(async () => {
+  setLoading(true);
 
-    if (error) {
-      console.error('[Fetch Items Error]', error.message);
-    } else {
-      setItems((data ?? []) as ItemRow[]);
-    }
-    setLoading(false);
-  }, []);
+  let q = supabase.from('items').select('*');
+
+  if (debouncedQuery) {
+    const like = `%${debouncedQuery}%`;
+    q = q.or(`title.ilike.${like},description.ilike.${like}`);
+  }
+
+  // Always behave like a feed; default to newest first
+  const ascending = sort === 'oldest';
+  q = q.order('created_at', { ascending }).order('id', { ascending: false }); // tie-breaker
+
+  const { data, error } = await q.limit(100);
+  if (error) {
+    console.error('[Fetch items error]', error.message);
+  } else {
+    setItems((data ?? []) as ItemRow[]);
+  }
+  setLoading(false);
+}, [debouncedQuery, sort]);
+
+const displayItems = useMemo(() => {
+  let arr = items;
+  if (onlyWishlisted) {
+    arr = arr.filter((it) => wish[it.id]); 
+  }
+  if (withImagesOnly) {
+    arr = arr.filter((it) => (it.image_url ?? '').trim()); // has image
+  }
+  return arr;
+}, [items, wish, onlyWishlisted, withImagesOnly]);
+
 
   /* Load wishlist map for the logged-in user */
   const fetchWishlistMap = useCallback(async () => {
@@ -111,10 +177,43 @@ export default function HomeScreen() {
     setWish(map);
   }, []);
 
+useEffect(() => {
+  const sub = DeviceEventEmitter.addListener('wishlist:changed', () => {
+    // re-fetch the user’s wishlist map so hearts update
+    fetchWishlistMap();
+  });
+  return () => sub.remove();
+}, [fetchWishlistMap]);
+
+
   useEffect(() => {
     fetchItems();
     fetchWishlistMap();
   }, [fetchItems, fetchWishlistMap]);
+
+  useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+
+  (async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    channel = supabase
+      .channel('rt-wishlist-home')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
+        () => fetchWishlistMap() // refresh the heart map
+      )
+      .subscribe();
+  })();
+
+  
+
+  return () => {
+    if (channel) supabase.removeChannel(channel);
+  };
+}, [fetchWishlistMap]);
 
   /* Responsive columns for web & mobile */
   const numColumns = useMemo(() => {
@@ -136,8 +235,9 @@ export default function HomeScreen() {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) {
-      // Not logged in — send to login?
+      // Not logged in — send to login
       router.push('/auth/login');
+      DeviceEventEmitter.emit('wishlist:changed');
       return;
     }
 
@@ -180,66 +280,156 @@ export default function HomeScreen() {
   }, [router, wish]);
 
   const renderItem = ({ item }: { item: ItemRow }) => {
-    const wished = !!wish[item.id];
-
-    return (
-      <View style={styles.card}>
-        {/* Heart overlay */}
-        <TouchableOpacity
-          onPress={() => toggleWishlist(item.id)}
-          style={styles.heartButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={wished ? 'heart' : 'heart-outline'}
-            size={20}
-            color={wished ? '#EF4444' : '#111827'}
-          />
-        </TouchableOpacity>
-
-        {/* Card body (tap navigates) */}
-        <TouchableOpacity
-          onPress={() => router.push(`/product/${item.id}`)}
-          activeOpacity={0.85}
-        >
-          <Image
-            source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
-            style={styles.image}
-            resizeMode="contain"
-          />
-          <View style={styles.cardContent}>
-            <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.description} numberOfLines={2}>{item.description ?? ''}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
+  const wished = !!wish[item.id];
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <HomeBanner
-        onExplore={() => router.push('/home')}
-        onListItem={() => router.push('/swap')}
-      />
+    <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      {/* Heart overlay */}
+      <TouchableOpacity
+        onPress={() => toggleWishlist(item.id)}
+        style={[styles.heartButton, { backgroundColor: c.card, borderColor: c.border }]}
+        activeOpacity={0.7}
+      >
+        <Ionicons
+          name={wished ? 'heart' : 'heart-outline'}
+          size={20}
+          color={wished ? '#EF4444' : c.text}
+        />
+      </TouchableOpacity>
 
-      <FlatList
-        key={`grid-${numColumns}`}
-        data={items}
-        keyExtractor={(item) => String(item.id)}
-        numColumns={numColumns}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {loading ? 'Loading…' : 'No items found. Try uploading some!'}
+      {/* Card body */}
+      <TouchableOpacity onPress={() => router.push(`/product/${item.id}`)} activeOpacity={0.85}>
+        <Image
+          source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
+          style={styles.image}
+          resizeMode="contain"
+        />
+        <View style={styles.cardContent}>
+          <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
+            {item.title}
           </Text>
-        }
-        showsVerticalScrollIndicator={false}
-      />
-    </SafeAreaView>
+          <Text style={[styles.description, { color: c.muted }]} numberOfLines={2}>
+            {item.description ?? ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </View>
   );
+};
+
+return (
+  <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+    <HomeBanner
+      onExplore={() => router.push('/home')}
+      onListItem={() => router.push('/swap')}
+    />
+
+    {/* Search input */}
+    <View style={styles.searchRow}>
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search items…"
+        placeholderTextColor={c.muted}
+        style={[styles.searchInput, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
+        returnKeyType="search"
+      />
+      {!!query && (
+        <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
+          <Text style={[styles.clearTxt, { color: c.muted }]}>Clear</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+
+    {/* Sort chips */}
+    <View style={styles.chipsRow}>
+      {(['newest', 'oldest'] as const).map((opt) => {
+        const active = sort === opt;
+        return (
+          <TouchableOpacity
+            key={opt}
+            onPress={() => setSort(opt)}
+            style={[
+              styles.chip,
+              { backgroundColor: c.card, borderColor: c.border },
+              active && { backgroundColor: c.tint, borderColor: c.tint },
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipTxt,
+                { color: c.text },
+                active && styles.chipTxtActive,
+              ]}
+            >
+              {opt === 'newest' ? 'Newest' : 'Oldest'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+
+    {/* Filter chips */}
+    <View style={styles.chipsRow}>
+      <TouchableOpacity
+        onPress={() => setOnlyWishlisted((v) => !v)}
+        style={[
+          styles.chip,
+          { backgroundColor: c.card, borderColor: c.border },
+          onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
+        ]}
+      >
+        <Text
+          style={[
+            styles.chipTxt,
+            { color: c.text },
+            onlyWishlisted && styles.chipTxtActive,
+          ]}
+        >
+          Wishlisted
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => setWithImagesOnly((v) => !v)}
+        style={[
+          styles.chip,
+          { backgroundColor: c.card, borderColor: c.border },
+          withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
+        ]}
+      >
+        <Text
+          style={[
+            styles.chipTxt,
+            { color: c.text },
+            withImagesOnly && styles.chipTxtActive,
+          ]}
+        >
+          With image
+        </Text>
+      </TouchableOpacity>
+    </View>
+
+    <Text style={{ marginLeft: 12, marginBottom: 6, color: c.muted }}>
+      {displayItems.length} result{displayItems.length === 1 ? '' : 's'}
+    </Text>
+
+    <FlatList
+      key={`grid-${numColumns}`}
+      data={displayItems}
+      keyExtractor={(item) => String(item.id)}
+      numColumns={numColumns}
+      renderItem={renderItem}
+      contentContainerStyle={styles.list}
+      columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
+      ListEmptyComponent={
+        <Text style={[styles.emptyText, { color: c.muted }]}>
+          {loading ? 'Loading…' : 'No items found. Try uploading some!'}
+        </Text>
+      }
+      showsVerticalScrollIndicator={false}
+    />
+  </SafeAreaView>
+);
 }
 
 /* ---------------- Styles  ---------------- */
@@ -253,6 +443,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Platform.select({ web: 4, default: 8 }),
     marginBottom: 12,
     overflow: 'hidden',
+    borderWidth: 1,
   },
   bannerInner: {
     width: '100%',
@@ -333,4 +524,38 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
+
+  // --- Search & Sort ---
+searchRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  paddingHorizontal: 8,
+  marginBottom: 8,
+},
+searchInput: {
+  flex: 1,
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  borderColor: '#E5E7EB',
+  borderWidth: 1,
+},
+clearBtn: { paddingVertical: 10, paddingHorizontal: 12 },
+clearTxt: { color: '#64748B', fontWeight: '600' },
+
+chipsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 8, marginBottom: 8 },
+chip: {
+  paddingVertical: 6,
+  paddingHorizontal: 12,
+  borderRadius: 999,
+  borderWidth: 1,
+  borderColor: '#CBD5E1',
+  backgroundColor: '#fff',
+},
+chipActive: { backgroundColor: '#0ea5e9', borderColor: '#0ea5e9' },
+chipTxt: { color: '#334155', fontWeight: '600' },
+chipTxtActive: { color: '#fff' },
+
 });

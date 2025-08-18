@@ -1,9 +1,10 @@
 // app/(tabs)/wishlist.tsx
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   FlatList,
   Image,
   RefreshControl,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { useColors } from '../../lib/theme';
 
 type Item = {
   id: string;
@@ -28,6 +30,7 @@ type WishlistEntry = {
 };
 
 export default function WishlistScreen() {
+  const c = useColors();
   const [rows, setRows] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,17 +56,18 @@ export default function WishlistScreen() {
         return;
       }
 
-   const { data, error } = await supabase
-  .from('wishlist')
-  .select(`
-    id,
-    item_id,
-    item:items!wishlist_item_id_fkey (
-      id,
-      title,
-      image_url
-    )
-  `)
+      const { data, error } = await supabase
+        .from('wishlist')
+        .select(`
+          id,
+          item_id,
+          created_at,
+          item:items!wishlist_item_id_fkey (
+            id,
+            title,
+            image_url
+          )
+        `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -88,6 +92,28 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }, [fetchWishlist]);
 
+  useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+
+  (async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    channel = supabase
+      .channel('rt-wishlist-list')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
+        () => fetchWishlist() // refresh the rows
+      )
+      .subscribe();
+  })();
+
+  return () => {
+    if (channel) supabase.removeChannel(channel);
+  };
+}, [fetchWishlist]);
+
   const removeFromWishlist = async (id: string) => {
     try {
       const { error } = await supabase.from('wishlist').delete().eq('id', id);
@@ -97,26 +123,31 @@ export default function WishlistScreen() {
       console.error('[Remove wishlist error]', e);
       Alert.alert('Remove failed', e.message ?? 'Please try again.');
     }
+    DeviceEventEmitter.emit('wishlist:changed');
   };
 
   const renderItem = ({ item }: { item: WishlistEntry }) => {
-    const thumb = item.item?.image_url ?? undefined;
-    const title = item.item?.title ?? 'Wishlist item';
+    if (!item.item) return null;
+    const thumb = item.item.image_url ?? undefined;
+    const title = item.item.title ?? 'Wishlist item';
+
+    
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
         <View style={styles.row}>
           <Image
-            source={{
-              uri: thumb || 'https://via.placeholder.com/300x400.png?text=No+Image',
-            }}
+            source={{ uri: thumb || 'https://via.placeholder.com/300x400.png?text=No+Image' }}
             style={styles.thumb}
             resizeMode="cover"
           />
           <View style={styles.info}>
-            <Text style={styles.title}>{item.item?.title ?? 'Wishlist item'}</Text>
-            <Text style={styles.label}>Title:</Text>
-            <Text style={styles.value} numberOfLines={2}>
+            <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
+              {title}
+            </Text>
+
+            <Text style={[styles.label, { color: c.muted }]}>Title:</Text>
+            <Text style={[styles.value, { color: c.text }]} numberOfLines={2}>
               {title}
             </Text>
 
@@ -129,14 +160,18 @@ export default function WishlistScreen() {
                   })
                 }
               >
-                <Text style={styles.link}>View Details</Text>
+                <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() =>
                   Alert.alert('Remove from wishlist?', title, [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Remove', style: 'destructive', onPress: () => removeFromWishlist(item.id) },
+                    {
+                      text: 'Remove',
+                      style: 'destructive',
+                      onPress: () => removeFromWishlist(item.id),
+                    },
                   ])
                 }
               >
@@ -150,20 +185,22 @@ export default function WishlistScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Wishlist</Text>
+    <View style={[styles.container, { backgroundColor: c.bg }]}>
+      <Text style={[styles.heading, { color: c.text }]}>Wishlist</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={c.text} />
       ) : rows.length === 0 ? (
-        <Text>No items in your wishlist yet.</Text>
+        <Text style={{ color: c.muted }}>No items in your wishlist yet.</Text>
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(r) => r.id}
           renderItem={renderItem}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl tintColor={c.text} refreshing={refreshing} onRefresh={onRefresh} />
+          }
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -180,9 +217,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
-    backgroundColor: '#fff',
   },
   row: { flexDirection: 'row', gap: 12 },
   thumb: {
@@ -192,8 +227,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
   },
   info: { flex: 1 },
-  title: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 },
-  label: { fontWeight: '600', marginTop: 4 },
+  title: { fontWeight: 'bold', marginBottom: 6, fontSize: 16 },
+  label: { fontWeight: '600', marginTop: 2 },
   value: { marginBottom: 2 },
 
   actions: {
@@ -202,6 +237,6 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
-  link: { color: '#007AFF', fontWeight: '500' },
+  link: { fontWeight: '500' },
   remove: { color: '#FF3B30', fontWeight: '500' },
 });

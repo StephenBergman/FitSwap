@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  DeviceEventEmitter,
   FlatList,
   Image,
   RefreshControl,
@@ -13,14 +12,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useConfirm } from '../../components/confirm/confirmprovider';
-import { supabase } from '../../lib/supabase';
-import { useColors } from '../../lib/theme';
+import { useConfirm } from '../../../components/confirm/confirmprovider';
+import { emit, on } from '../../../lib/eventBus';
+import { supabase } from '../../../lib/supabase';
+import { useColors } from '../../../lib/theme';
 
 type Item = {
   id: string;
   title: string;
   image_url: string | null;
+  archived_at?: string | null;
 };
 
 type WishlistEntry = {
@@ -32,7 +33,7 @@ type WishlistEntry = {
 
 export default function WishlistScreen() {
   const c = useColors();
-  const confirm = useConfirm(); // ← NEW
+  const confirm = useConfirm();
   const [rows, setRows] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,6 +47,7 @@ export default function WishlistScreen() {
       item: Array.isArray(r.item) ? r.item[0] ?? null : r.item ?? null,
     }));
 
+  // Load wishlist (server-filters out delisted items)
   const fetchWishlist = useCallback(async () => {
     setLoading(true);
     try {
@@ -53,24 +55,28 @@ export default function WishlistScreen() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setLoading(false);
-        Alert.alert('Error', 'User not logged in');
+        setRows([]);
         return;
       }
 
       const { data, error } = await supabase
         .from('wishlist')
-        .select(`
+        .select(
+          `
           id,
           item_id,
           created_at,
           item:items!wishlist_item_id_fkey (
             id,
             title,
-            image_url
+            image_url,
+            archived_at
           )
-        `)
+        `
+        )
         .eq('user_id', user.id)
+        // do not show delisted items in the wishlist list
+        .is('item.archived_at', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -94,11 +100,14 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }, [fetchWishlist]);
 
+  // Realtime: if wishlist rows change for this user, refresh
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       channel = supabase
@@ -106,7 +115,7 @@ export default function WishlistScreen() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
-          () => fetchWishlist() // refresh the rows
+          () => fetchWishlist()
         )
         .subscribe();
     })();
@@ -116,17 +125,45 @@ export default function WishlistScreen() {
     };
   }, [fetchWishlist]);
 
+  // Cross-platform bus: refetch when other screens change wishlist
+  useEffect(() => {
+    const off = on('wishlist:changed', fetchWishlist);
+    return off;
+  }, [fetchWishlist]);
+
+  // Remove entry and notify other screens
   const removeFromWishlist = async (id: string) => {
     try {
       const { error } = await supabase.from('wishlist').delete().eq('id', id);
       if (error) throw error;
       setRows((prev) => prev.filter((r) => r.id !== id));
+      emit('wishlist:changed');
     } catch (e: any) {
       console.error('[Remove wishlist error]', e);
-      Alert.alert('Remove failed', e.message ?? 'Please try again.');
+      Alert.alert('Remove failed', e?.message ?? 'Please try again.');
     }
-    DeviceEventEmitter.emit('wishlist:changed'); // optional: remove on web
   };
+
+  // Safe open: verify the item is still listed
+  const openItem = useCallback(
+    async (id: string) => {
+      const { data, error } = await supabase
+        .from('items')
+        .select('id,archived_at')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !data || data.archived_at) {
+        Alert.alert('Item unavailable', 'This item is no longer listed.');
+        // Also remove it from the local list if present
+        setRows((prev) => prev.filter((r) => r.item_id !== id));
+        return;
+      }
+
+      router.push(`/product/${id}`);
+    },
+    [router]
+  );
 
   const renderItem = ({ item }: { item: WishlistEntry }) => {
     if (!item.item) return null;
@@ -146,20 +183,8 @@ export default function WishlistScreen() {
               {title}
             </Text>
 
-            <Text style={[styles.label, { color: c.muted }]}>Title:</Text>
-            <Text style={[styles.value, { color: c.text }]} numberOfLines={2}>
-              {title}
-            </Text>
-
             <View style={styles.actions}>
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: '/product/[ProductId]',
-                    params: { ProductId: item.item_id },
-                  })
-                }
-              >
+              <TouchableOpacity onPress={() => openItem(item.item_id)}>
                 <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
               </TouchableOpacity>
 
@@ -213,12 +238,7 @@ const THUMB_W = 72;
 const styles = StyleSheet.create({
   container: { padding: 20, flex: 1 },
   heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-
-  card: {
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-  },
+  card: { padding: 12, borderWidth: 1, borderRadius: 8 },
   row: { flexDirection: 'row', gap: 12 },
   thumb: {
     width: THUMB_W,
@@ -228,15 +248,7 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1 },
   title: { fontWeight: 'bold', marginBottom: 6, fontSize: 16 },
-  label: { fontWeight: '600', marginTop: 2 },
-  value: { marginBottom: 2 },
-
-  actions: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 16,
-    alignItems: 'center',
-  },
+  actions: { marginTop: 10, flexDirection: 'row', gap: 16, alignItems: 'center' },
   link: { fontWeight: '500' },
   remove: { color: '#FF3B30', fontWeight: '500' },
 });

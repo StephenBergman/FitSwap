@@ -1,7 +1,8 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { DrawerToggleButton } from '@react-navigation/drawer';
 import { Tabs } from 'expo-router';
-import { useColors } from '../../lib/theme';
+import { useColors } from '../../../lib/theme';
 
 export default function TabLayout() {
   const c = useColors();
@@ -9,6 +10,9 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
+        //  show the hamburger on every tab screen
+        headerLeft: () => <DrawerToggleButton tintColor={c.text} />,
+
         tabBarIcon: ({ color, size }) => {
           let icon: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'home') icon = 'home';
@@ -26,26 +30,11 @@ export default function TabLayout() {
         tabBarInactiveTintColor: c.muted,
       })}
     >
-      <Tabs.Screen
-        name="home"
-        options={{ title: 'Home', tabBarLabel: 'home' }}
-      />
-      <Tabs.Screen
-        name="wishlist"
-        options={{ title: 'Wishlist', tabBarLabel: 'wishlist' }}
-      />
-      <Tabs.Screen
-        name="swap"
-        options={{ title: 'Swap', tabBarLabel: 'swap' }}
-      />
-      <Tabs.Screen
-        name="myswaps"
-        options={{ title: 'My Swaps', tabBarLabel: 'My Swaps' }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{ title: 'Settings', tabBarLabel: 'settings' }}
-      />
+      <Tabs.Screen name="home" options={{ title: 'Home', tabBarLabel: 'home' }} />
+      <Tabs.Screen name="wishlist" options={{ title: 'Wishlist', tabBarLabel: 'wishlist' }} />
+      <Tabs.Screen name="swap" options={{ title: 'Swap', tabBarLabel: 'swap' }} />
+      <Tabs.Screen name="myswaps" options={{ title: 'My Swaps', tabBarLabel: 'My Swaps' }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarLabel: 'settings' }} />
     </Tabs>
   );
 }

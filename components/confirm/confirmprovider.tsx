@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import {
-  Modal,
+  BackHandler,
   Platform,
   Pressable,
   StyleSheet,
@@ -26,6 +26,7 @@ export type ConfirmOptions = {
 
 type ConfirmFn = (opts?: ConfirmOptions) => Promise<boolean>;
 type ConfirmContextValue = { confirm: ConfirmFn };
+
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
 const DEFAULTS: Required<ConfirmOptions> = {
@@ -42,13 +43,12 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
   const [opts, setOpts] = useState<ConfirmOptions>(DEFAULTS);
   const resolverRef = useRef<((v: boolean) => void) | null>(null);
 
-  const confirm: ConfirmFn = (options) => {
-    return new Promise<boolean>((resolve) => {
+  const confirm: ConfirmFn = (options) =>
+    new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
       setOpts({ ...DEFAULTS, ...(options ?? {}) });
       setVisible(true);
     });
-  };
 
   const resolveAndClose = (value: boolean) => {
     setVisible(false);
@@ -56,6 +56,16 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
     resolverRef.current = null;
     r?.(value);
   };
+
+  // Android back button
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      resolveAndClose(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible]);
 
   // Esc to close on web
   useEffect(() => {
@@ -71,21 +81,20 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
 
-      {/* Dialog */}
-      <Modal
-        animationType="fade"
-        transparent
-        visible={visible}
-        onRequestClose={() => resolveAndClose(false)} // Android back
-      >
-        <View style={[styles.backdrop]} />
-
-        <View
-          style={styles.centerWrap}
-          accessibilityRole="alert"
-          accessible
-        >
-          <View style={[styles.sheet, { backgroundColor: c.card, borderColor: c.border }]}>
+      {/* Absolute overlay instead of <Modal/> to avoid Android layout glitches */}
+      {visible && (
+        <View style={styles.portalRoot} pointerEvents="box-none" collapsable={false}>
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => resolveAndClose(false)}
+            android_ripple={{ color: 'rgba(255,255,255,0.05)', borderless: true }}
+          />
+          <View
+            style={[styles.sheet, { backgroundColor: c.card, borderColor: c.border }]}
+            accessibilityRole="alert"
+            accessible
+            pointerEvents="auto"
+          >
             {!!opts.title && (
               <Text style={[styles.title, { color: c.text }]}>{opts.title}</Text>
             )}
@@ -129,7 +138,7 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </ConfirmContext.Provider>
   );
 }
@@ -138,7 +147,7 @@ export function useConfirm(): ConfirmFn {
   const ctx = useContext(ConfirmContext);
   if (ctx) return ctx.confirm;
 
-  // Fallback if provider isn’t mounted yet.
+  // Fallback if provider isn’t mounted yet
   return async (o?: ConfirmOptions) => {
     const options = { ...DEFAULTS, ...(o ?? {}) };
     if (Platform.OS === 'web') {
@@ -147,7 +156,6 @@ export function useConfirm(): ConfirmFn {
         : options.message ?? '';
       return window.confirm(text);
     }
-    // Native fallback: Alert with two buttons
     const { Alert } = await import('react-native');
     return new Promise<boolean>((resolve) => {
       Alert.alert(
@@ -167,23 +175,32 @@ export function useConfirm(): ConfirmFn {
 }
 
 const styles = StyleSheet.create({
+  // full-screen overlay above the app
+  portalRoot: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 10000,
+    elevation: 10000,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  centerWrap: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   sheet: {
-    width: '100%',
+    width: '90%',
     maxWidth: 420,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
     gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   title: { fontSize: 18, fontWeight: '700' },
   message: { fontSize: 14, lineHeight: 20 },

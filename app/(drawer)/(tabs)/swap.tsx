@@ -14,8 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { supabase } from '../../lib/supabase';
-import { useColors } from '../../lib/theme';
+import { supabase } from '../../../lib/supabase';
+import { useColors } from '../../../lib/theme';
 
 const b64ToUint8 = (b64: string) => {
   const binary = global.atob ? global.atob(b64) : Buffer.from(b64, 'base64').toString('binary');

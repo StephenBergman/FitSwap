@@ -1,9 +1,9 @@
 // app/(tabs)/settings.tsx
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import DevPanel from '../../components/dev/devpanel';
-import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../lib/theme';
+import DevPanel from '../../../components/dev/devpanel';
+import { supabase } from '../../../lib/supabase';
+import { useTheme } from '../../../lib/theme';
 
 export default function SettingsScreen() {
    const { scheme, resolvedScheme, setScheme } = useTheme();

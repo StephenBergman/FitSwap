@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useConfirm } from '../../components/confirm/confirmprovider';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
@@ -40,10 +41,17 @@ export default function SwapDetailScreen() {
   const { Id } = useLocalSearchParams<{ Id?: string }>();
   const router = useRouter();
   const c = useColors();
+  const confirmDlg = useConfirm(); // ← NEW
 
   const [swap, setSwap] = useState<SwapRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // who am I?
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
 
   // DEV list when there is no Id or the record is missing
   const [devLoading, setDevLoading] = useState(false);
@@ -51,7 +59,7 @@ export default function SwapDetailScreen() {
 
   const fetchSwap = useCallback(
     async (overrideId?: string) => {
-      const wantedId = overrideId ?? Id; 
+      const wantedId = overrideId ?? Id;
       if (!wantedId || Array.isArray(wantedId)) {
         setSwap(null);
         setLoading(false);
@@ -91,6 +99,30 @@ export default function SwapDetailScreen() {
     setRefreshing(false);
   }, [fetchSwap]);
 
+  // Realtime: keep this swap row updated
+  // Realtime: keep this swap row updated
+useEffect(() => {
+  if (!swap?.id) return;
+
+  const channel = supabase
+    .channel('rt-swap-detail')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'swaps', filter: `id=eq.${swap.id}` },
+      (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          setSwap((s) => (s ? { ...s, ...(payload.new as any) } : s));
+        }
+      }
+    )
+    .subscribe(); 
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [swap?.id]);
+
+
+  // DEV helper when no Id
   const devLoadRecent = useCallback(async () => {
     setDevLoading(true);
     try {
@@ -122,6 +154,121 @@ export default function SwapDetailScreen() {
       setDevLoading(false);
     }
   }, []);
+
+  // ---------- Actions (atomic guards) ----------
+  const isReceiver = !!(me && swap && swap.receiver_id === me);
+  const isSender   = !!(me && swap && swap.sender_id === me);
+  const pending    = swap?.status === 'pending';
+
+  const acceptSwap = async () => {
+  if (!swap || !me) return;
+
+  const ok = await confirmDlg({
+    title: 'Confirm trade?',
+    message: swap.item?.title ?? 'This will accept the trade.',
+    confirmText: 'Confirm',
+    cancelText: 'Back',
+  });
+  if (!ok) return;
+
+  // keep previous for rollback
+  const prevStatus = swap.status;
+  // optimistic UI
+  setSwap(s => (s ? { ...s, status: 'accepted' } : s));
+
+  try {
+    const { data, error } = await supabase
+      .from('swaps')
+      .update({ status: 'accepted' })
+      .eq('id', swap.id)
+      .eq('receiver_id', me)
+      .eq('status', 'pending')          // atomic guard
+      .select('id, status')
+      .maybeSingle();                    // 0 rows => null data (not a thrown error)
+
+    if (error) throw error;
+
+    if (!data) {
+      // No matching row -> someone resolved it already (canceled/declined/accepted)
+      await fetchSwap(); // get the latest server state
+      Alert.alert(
+        'Trade already resolved',
+        'Looks like the other user canceled this trade'
+      );
+      router.replace('/(tabs)/myswaps');
+      return;
+    }
+
+    // success
+    router.replace('/(tabs)/myswaps');
+  } catch (e: any) {
+    // rollback and surface error
+    setSwap(s => (s ? { ...s, status: prevStatus } : s));
+    Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
+    await fetchSwap(); // refresh to stay in sync
+  }
+};
+
+
+  const denySwap = async () => {
+    if (!swap || !me) return;
+    const ok = await confirmDlg({
+      title: 'Deny trade?',
+      message: 'This will reject the trade.',
+      confirmText: 'Deny',
+      cancelText: 'Back',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setSwap((s) => (s ? { ...s, status: 'declined' } : s));
+    try {
+      const { error, data } = await supabase
+        .from('swaps')
+        .update({ status: 'declined' })
+        .eq('id', swap.id)
+        .eq('receiver_id', me)
+        .eq('status', 'pending')
+        .select('id, status')
+        .single();
+
+      if (error || !data) throw error ?? new Error('No update returned');
+      router.replace('/(tabs)/myswaps');
+    } catch (e: any) {
+      setSwap((s) => (s ? { ...s, status: 'pending' } : s));
+      Alert.alert('Deny failed', e?.message ?? 'Please try again.');
+    }
+  };
+
+  const cancelSwap = async () => {
+    if (!swap || !me) return;
+    const ok = await confirmDlg({
+      title: 'Cancel trade?',
+      message: 'This will withdraw your offer.',
+      confirmText: 'Cancel offer',
+      cancelText: 'Back',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setSwap((s) => (s ? { ...s, status: 'canceled' } : s));
+    try {
+      const { error, data } = await supabase
+        .from('swaps')
+        .update({ status: 'canceled' })
+        .eq('id', swap.id)
+        .eq('sender_id', me)
+        .eq('status', 'pending')
+        .select('id, status')
+        .single();
+
+      if (error || !data) throw error ?? new Error('No update returned');
+    } catch (e: any) {
+      setSwap((s) => (s ? { ...s, status: 'pending' } : s));
+      Alert.alert('Cancel failed', e?.message ?? 'Please try again.');
+    }
+  };
+  // ---------------------------------------------
 
   if (loading) {
     return (
@@ -228,6 +375,37 @@ export default function SwapDetailScreen() {
         )}
         {!!off?.title && <Text style={[styles.cardTitle, { color: c.text }]}>{off.title}</Text>}
       </View>
+
+      {/* Actions */}
+      {pending && (
+        <View style={{ marginTop: 16, gap: 10 }}>
+          {isReceiver ? (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={acceptSwap}
+                style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, backgroundColor: c.tint }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={denySwap}
+                style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: '#FF3B30' }}
+              >
+                <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Deny</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {isSender ? (
+            <TouchableOpacity
+              onPress={cancelSwap}
+              style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: '#FF3B30', alignSelf: 'flex-start' }}
+            >
+              <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Cancel</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
     </ScrollView>
   );
 }

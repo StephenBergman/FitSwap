@@ -2,6 +2,7 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -10,8 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { supabase } from '../../lib/supabase';
-import { useColors } from '../../lib/theme';
+import { useConfirm } from '../../../components/confirm/confirmprovider';
+import { supabase } from '../../../lib/supabase';
+import { useColors } from '../../../lib/theme';
 
 type VUserSwap = {
   id: string;
@@ -46,6 +48,7 @@ type JoinedSwap = {
 
 export default function MySwapsScreen() {
   const c = useColors();
+  const confirmDlg = useConfirm(); // ← NEW
   const [includeSelf, setIncludeSelf] = useState<boolean>(__DEV__);
   const [swaps, setSwaps] = useState<VUserSwap[]>([]);
   const [tab, setTab] = useState<'sent' | 'received'>('received');
@@ -62,7 +65,7 @@ export default function MySwapsScreen() {
     return () => { mounted = false; };
   }, []);
 
-  // Core fetch (same logic you had, wrapped in useCallback so we can call from realtime)
+  // Core fetch 
   const loadSwaps = useCallback(async () => {
     if (!userId) return;
 
@@ -213,8 +216,99 @@ export default function MySwapsScreen() {
 
   const filtered = tab === 'sent' ? sent : received;
 
+  // ----- helpers -----
+  const patchLocal = useCallback((id: string, status: VUserSwap['status']) => {
+    setSwaps(prev => prev.map(s => (s.id === id ? { ...s, status } : s)));
+  }, []);
+  // ---------------------------------------------
+
+  // ----- action handlers (atomic guards) -----
+  const confirmSwap = useCallback(async (row: VUserSwap) => {
+    if (!userId) return;
+    const ok = await confirmDlg({
+      title: 'Confirm trade?',
+      message: row.requested_title ?? 'This will accept the trade.',
+      confirmText: 'Confirm',
+      cancelText: 'Back',
+    });
+    if (!ok) return;
+    patchLocal(row.id, 'accepted');
+    try {
+      const { error, data } = await supabase
+        .from('swaps')
+        .update({ status: 'accepted' })
+        .eq('id', row.id)
+        .eq('receiver_id', userId)
+        .eq('status', 'pending')
+        .select('id')
+        .single();
+      if (error || !data) throw error ?? new Error('No update returned');
+    } catch (e: any) {
+      patchLocal(row.id, 'pending');
+      Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
+    }
+  }, [confirmDlg, patchLocal, userId]);
+
+  const denySwap = useCallback(async (row: VUserSwap) => {
+    if (!userId) return;
+    const ok = await confirmDlg({
+      title: 'Deny trade?',
+      message: 'This will reject the trade.',
+      confirmText: 'Deny',
+      cancelText: 'Back',
+      destructive: true,
+    });
+    if (!ok) return;
+    patchLocal(row.id, 'declined');
+    try {
+      const { error, data } = await supabase
+        .from('swaps')
+        .update({ status: 'declined' })
+        .eq('id', row.id)
+        .eq('receiver_id', userId)
+        .eq('status', 'pending')
+        .select('id')
+        .single();
+      if (error || !data) throw error ?? new Error('No update returned');
+    } catch (e: any) {
+      patchLocal(row.id, 'pending');
+      Alert.alert('Deny failed', e?.message ?? 'Please try again.');
+    }
+  }, [confirmDlg, patchLocal, userId]);
+
+  const cancelSwap = useCallback(async (row: VUserSwap) => {
+    if (!userId) return;
+    const ok = await confirmDlg({
+      title: 'Cancel trade?',
+      message: 'This will withdraw your offer.',
+      confirmText: 'Cancel offer',
+      cancelText: 'Back',
+      destructive: true,
+    });
+    if (!ok) return;
+    patchLocal(row.id, 'canceled');
+    try {
+      const { error, data } = await supabase
+        .from('swaps')
+        .update({ status: 'canceled' })
+        .eq('id', row.id)
+        .eq('sender_id', userId)
+        .eq('status', 'pending')
+        .select('id')
+        .single();
+      if (error || !data) throw error ?? new Error('No update returned');
+    } catch (e: any) {
+      patchLocal(row.id, 'pending');
+      Alert.alert('Cancel failed', e?.message ?? 'Please try again.');
+    }
+  }, [confirmDlg, patchLocal, userId]);
+  // -------------------------------------------
+
   const renderItem = ({ item }: { item: VUserSwap }) => {
     const isSent = item.sender_id === userId;
+    const isReceiver = item.receiver_id === userId;
+    const pending = item.status === 'pending';
+
     const thumb = isSent ? item.requested_image_url : item.offered_image_url;
     const title = isSent ? item.requested_title ?? 'Requested item' : item.offered_title ?? 'Offered item';
     const label = isSent ? 'Requesting:' : 'They offered:';
@@ -242,9 +336,28 @@ export default function MySwapsScreen() {
               </>
             )}
 
-            <TouchableOpacity onPress={() => router.push(`/swaps/${item.id}`)}>
-              <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginTop: 8 }}>
+              <TouchableOpacity onPress={() => router.push(`/swaps/${item.id}`)}>
+                <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
+              </TouchableOpacity>
+
+              {pending && isReceiver && (
+                <>
+                  <TouchableOpacity onPress={() => confirmSwap(item)}>
+                    <Text style={{ color: c.tint, fontWeight: '700' }}>Confirm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => denySwap(item)}>
+                    <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Deny</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {pending && !isReceiver && (
+                <TouchableOpacity onPress={() => cancelSwap(item)}>
+                  <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -333,5 +446,5 @@ const styles = StyleSheet.create({
   title: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 },
   label: { fontWeight: '600', marginTop: 4 },
   value: { marginBottom: 2 },
-  link: { marginTop: 10, fontWeight: '500' },
+  link: { marginTop: 2, fontWeight: '500' },
 });

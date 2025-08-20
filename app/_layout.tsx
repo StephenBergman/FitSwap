@@ -1,10 +1,12 @@
-// app/_layout.tsx
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
+
+// ✅ use correct casing for the file name
 import { ConfirmProvider } from '../components/confirm/confirmprovider';
+
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useColors, useTheme } from '../lib/theme';
 import { DevProvider } from './dev';
@@ -14,13 +16,8 @@ function Shell() {
   const c = useColors();
 
   return (
-    // Give the root a themed background to avoid flashes on route changes
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <StatusBar
-        style={resolvedScheme === 'dark' ? 'light' : 'dark'}
-        backgroundColor={c.bg}
-      />
-      {/* Let nested layouts (tabs, product, swaps) control their own headers */}
+      <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} backgroundColor={c.bg} />
       <Slot />
       <Toast />
     </View>
@@ -32,17 +29,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     let mounted = true;
-
-    // initial user load
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUser(data.user ?? null);
-    });
-
-    // keep user in sync while app is open
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.getUser().then(({ data }) => mounted && setUser(data.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (mounted) setUser(session?.user ?? null);
     });
-
     return () => {
       mounted = false;
       sub?.subscription?.unsubscribe?.();
@@ -51,7 +41,6 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      {/* Wrap the whole app so useConfirm() works anywhere */}
       <ConfirmProvider>
         <DevProvider user={user}>
           <Shell />

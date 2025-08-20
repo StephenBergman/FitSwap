@@ -1,6 +1,6 @@
 // app/(tabs)/settings.tsx
 import { useRouter } from 'expo-router';
-import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import DevPanel from '../../components/dev/devpanel';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
@@ -8,7 +8,6 @@ import { useTheme } from '../../lib/theme';
 export default function SettingsScreen() {
    const { scheme, resolvedScheme, setScheme } = useTheme();
   const isDark = resolvedScheme === 'dark';
-  const toggleDark = () => setScheme(isDark ? 'light' : 'dark');
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -23,12 +22,6 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, isDark && styles.dark]}>
       <Text style={[styles.heading, isDark && styles.darkText]}>Settings</Text>
-
-      {/*3-way control (System / Light / Dark).*/}
-      <View style={styles.row}>
-        <Text style={[styles.label, isDark && styles.darkText]}>Dark Mode</Text>
-        <Switch value={isDark} onValueChange={toggleDark} />
-      </View>
 
       {/* Optional quick buttons to set exact mode */}
 <View style={styles.row}>

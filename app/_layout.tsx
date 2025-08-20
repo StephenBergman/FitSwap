@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { ConfirmProvider } from '../components/confirm/confirmprovider';
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useColors, useTheme } from '../lib/theme';
 import { DevProvider } from './dev';
@@ -50,9 +51,12 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <DevProvider user={user}>
-        <Shell />
-      </DevProvider>
+      {/* Wrap the whole app so useConfirm() works anywhere */}
+      <ConfirmProvider>
+        <DevProvider user={user}>
+          <Shell />
+        </DevProvider>
+      </ConfirmProvider>
     </ThemeProvider>
   );
 }

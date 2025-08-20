@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useConfirm } from '../../components/confirm/confirmprovider';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
@@ -31,6 +32,7 @@ type WishlistEntry = {
 
 export default function WishlistScreen() {
   const c = useColors();
+  const confirm = useConfirm(); // ← NEW
   const [rows, setRows] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,26 +95,26 @@ export default function WishlistScreen() {
   }, [fetchWishlist]);
 
   useEffect(() => {
-  let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-  (async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    channel = supabase
-      .channel('rt-wishlist-list')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
-        () => fetchWishlist() // refresh the rows
-      )
-      .subscribe();
-  })();
+      channel = supabase
+        .channel('rt-wishlist-list')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
+          () => fetchWishlist() // refresh the rows
+        )
+        .subscribe();
+    })();
 
-  return () => {
-    if (channel) supabase.removeChannel(channel);
-  };
-}, [fetchWishlist]);
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [fetchWishlist]);
 
   const removeFromWishlist = async (id: string) => {
     try {
@@ -123,15 +125,13 @@ export default function WishlistScreen() {
       console.error('[Remove wishlist error]', e);
       Alert.alert('Remove failed', e.message ?? 'Please try again.');
     }
-    DeviceEventEmitter.emit('wishlist:changed');
+    DeviceEventEmitter.emit('wishlist:changed'); // optional: remove on web
   };
 
   const renderItem = ({ item }: { item: WishlistEntry }) => {
     if (!item.item) return null;
     const thumb = item.item.image_url ?? undefined;
     const title = item.item.title ?? 'Wishlist item';
-
-    
 
     return (
       <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -164,16 +164,16 @@ export default function WishlistScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() =>
-                  Alert.alert('Remove from wishlist?', title, [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Remove',
-                      style: 'destructive',
-                      onPress: () => removeFromWishlist(item.id),
-                    },
-                  ])
-                }
+                onPress={async () => {
+                  const ok = await confirm({
+                    title: 'Remove from wishlist?',
+                    message: title,
+                    confirmText: 'Remove',
+                    cancelText: 'Cancel',
+                    destructive: true,
+                  });
+                  if (ok) await removeFromWishlist(item.id);
+                }}
               >
                 <Text style={styles.remove}>Remove</Text>
               </TouchableOpacity>

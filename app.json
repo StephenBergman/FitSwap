@@ -15,10 +15,10 @@
 
     "android": {
       "package": "com.bergman34.fitswap",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
-
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/fitswap-adaptive-foreground.png",
+        "foregroundImage": "./assets/images/FitswapLogo.png",
         "backgroundColor": "#ffffff"
       }
     },
@@ -26,7 +26,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/FitswapLogo"
+      "favicon": "./assets/images/favicon.png"
     },
 
     "plugins": [
@@ -51,6 +51,14 @@
       "eas": {
         "projectId": "f08cbe98-cec8-425b-989c-c38cdfcfa4eb"
       }
+    },
+
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+
+    "updates": {
+      "url": "https://u.expo.dev/f08cbe98-cec8-425b-989c-c38cdfcfa4eb"
     }
   }
 }

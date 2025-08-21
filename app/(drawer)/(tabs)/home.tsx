@@ -162,7 +162,7 @@ export default function HomeScreen() {
     setWish(map);
   }, []);
 
-  // React to wishlist changes elsewhere (subscribe with `on`, not `emit`)
+  // React to wishlist changes elsewhere
   useEffect(() => {
     const off = on('wishlist:changed', fetchWishlistMap);
     return off;
@@ -232,7 +232,7 @@ export default function HomeScreen() {
       const uid = auth.user?.id;
       if (!uid) {
         router.push('/auth/login');
-        emit('wishlist:changed'); // still valid: publish without handler
+        emit('wishlist:changed');
         return;
       }
 
@@ -246,7 +246,7 @@ export default function HomeScreen() {
           return;
         }
       } catch {
-        // fallback below
+        // ignore and fallback below
       }
 
       try {
@@ -320,82 +320,92 @@ export default function HomeScreen() {
     );
   };
 
+  // ---------- Make the WHOLE screen scroll ----------
+  const ListHeader = useMemo(
+    () => (
+      <View>
+        <HomeBanner onExplore={() => router.push('/home')} onListItem={() => router.push('/swap')} />
+
+        <View style={styles.searchRow}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search items…"
+            placeholderTextColor={c.muted}
+            style={[styles.searchInput, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
+            returnKeyType="search"
+          />
+          {!!query && (
+            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
+              <Text style={[styles.clearTxt, { color: c.muted }]}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.chipsRow}>
+          {(['newest', 'oldest'] as const).map((opt) => {
+            const active = sort === opt;
+            return (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => setSort(opt)}
+                style={[
+                  styles.chip,
+                  { backgroundColor: c.card, borderColor: c.border },
+                  active && { backgroundColor: c.tint, borderColor: c.tint },
+                ]}
+              >
+                <Text style={[styles.chipTxt, { color: c.text }, active && styles.chipTxtActive]}>
+                  {opt === 'newest' ? 'Newest' : 'Oldest'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={styles.chipsRow}>
+          <TouchableOpacity
+            onPress={() => setOnlyWishlisted((v) => !v)}
+            style={[
+              styles.chip,
+              { backgroundColor: c.card, borderColor: c.border },
+              onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
+            ]}
+          >
+            <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>Wishlisted</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setWithImagesOnly((v) => !v)}
+            style={[
+              styles.chip,
+              { backgroundColor: c.card, borderColor: c.border },
+              withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
+            ]}
+          >
+            <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>With image</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={{ marginLeft: 12, marginBottom: 6, color: c.muted }}>
+          {displayItems.length} result{displayItems.length === 1 ? '' : 's'}
+        </Text>
+      </View>
+    ),
+    [router, query, c, sort, onlyWishlisted, withImagesOnly, displayItems.length]
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      <HomeBanner onExplore={() => router.push('/home')} onListItem={() => router.push('/swap')} />
-
-      <View style={styles.searchRow}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search items…"
-          placeholderTextColor={c.muted}
-          style={[styles.searchInput, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
-          returnKeyType="search"
-        />
-        {!!query && (
-          <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
-            <Text style={[styles.clearTxt, { color: c.muted }]}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.chipsRow}>
-        {(['newest', 'oldest'] as const).map((opt) => {
-          const active = sort === opt;
-          return (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => setSort(opt)}
-              style={[
-                styles.chip,
-                { backgroundColor: c.card, borderColor: c.border },
-                active && { backgroundColor: c.tint, borderColor: c.tint },
-              ]}
-            >
-              <Text style={[styles.chipTxt, { color: c.text }, active && styles.chipTxtActive]}>
-                {opt === 'newest' ? 'Newest' : 'Oldest'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <View style={styles.chipsRow}>
-        <TouchableOpacity
-          onPress={() => setOnlyWishlisted((v) => !v)}
-          style={[
-            styles.chip,
-            { backgroundColor: c.card, borderColor: c.border },
-            onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
-          ]}
-        >
-          <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>Wishlisted</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setWithImagesOnly((v) => !v)}
-          style={[
-            styles.chip,
-            { backgroundColor: c.card, borderColor: c.border },
-            withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
-          ]}
-        >
-          <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>With image</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={{ marginLeft: 12, marginBottom: 6, color: c.muted }}>
-        {displayItems.length} result{displayItems.length === 1 ? '' : 's'}
-      </Text>
-
       <FlatList
         key={`grid-${numColumns}`}
         data={displayItems}
         keyExtractor={(item) => String(item.id)}
         numColumns={numColumns}
         renderItem={renderItem}
-        contentContainerStyle={styles.list}
+        // header makes the WHOLE page scroll
+        ListHeaderComponent={ListHeader}
+        contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 100 }}
         columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
         ListEmptyComponent={
           <Text style={[styles.emptyText, { color: c.muted }]}>
@@ -456,7 +466,6 @@ const styles = StyleSheet.create({
   blobB: { position: 'absolute', width: 180, height: 180, borderRadius: 999, backgroundColor: '#5EEAD455', bottom: -50, left: -30 },
 
   // --- List/Grid ---
-  list: { paddingHorizontal: 8, paddingBottom: 100, gap: 6 },
   emptyText: { textAlign: 'center', color: '#666', marginTop: 50, fontSize: 16 },
 
   // --- Cards ---

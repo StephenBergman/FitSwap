@@ -1,15 +1,19 @@
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as Updates from 'expo-updates';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
-
-// ✅ use correct casing for the file name
 import { ConfirmProvider } from '../components/confirm/confirmprovider';
-
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useColors, useTheme } from '../lib/theme';
 import { DevProvider } from './dev';
+
+console.log('EAS Update info:', {
+  channel: Updates.channel,               // the baked-in channel
+  runtimeVersion: Updates.runtimeVersion, // used to match updates
+  updateId: Updates.updateId,             // current update id
+});
 
 function Shell() {
   const { resolvedScheme } = useTheme();

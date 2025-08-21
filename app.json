@@ -4,7 +4,7 @@
     "slug": "FitSwap",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/fitswap-icon.png",
+    "icon": "./assets/images/FitswapLogo.png",
     "scheme": "client",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,6 +15,7 @@
 
     "android": {
       "package": "com.bergman34.fitswap",
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {

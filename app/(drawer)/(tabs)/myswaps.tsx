@@ -48,7 +48,7 @@ type JoinedSwap = {
 
 export default function MySwapsScreen() {
   const c = useColors();
-  const confirmDlg = useConfirm(); // ← NEW
+  const confirmDlg = useConfirm(); 
   const [includeSelf, setIncludeSelf] = useState<boolean>(__DEV__);
   const [swaps, setSwaps] = useState<VUserSwap[]>([]);
   const [tab, setTab] = useState<'sent' | 'received'>('received');

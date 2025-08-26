@@ -1,6 +1,5 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { DrawerToggleButton } from '@react-navigation/drawer';
 import { Tabs } from 'expo-router';
 import { useColors } from '../../../lib/theme';
 
@@ -10,9 +9,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        //  show the hamburger on every tab screen
-        headerLeft: () => <DrawerToggleButton tintColor={c.text} />,
+        headerShown: false,
 
+        // Tab bar styling
+        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border },
+        tabBarActiveTintColor: c.tint,
+        tabBarInactiveTintColor: c.muted,
+
+        // Tab icons per route
         tabBarIcon: ({ color, size }) => {
           let icon: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'home') icon = 'home';
@@ -22,12 +26,6 @@ export default function TabLayout() {
           if (route.name === 'wishlist') icon = 'heart';
           return <Ionicons name={icon} size={size} color={color} />;
         },
-        headerStyle: { backgroundColor: c.card },
-        headerTitleStyle: { color: c.text },
-        headerTintColor: c.tint,
-        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border },
-        tabBarActiveTintColor: c.tint,
-        tabBarInactiveTintColor: c.muted,
       })}
     >
       <Tabs.Screen name="home" options={{ title: 'Home', tabBarLabel: 'home' }} />

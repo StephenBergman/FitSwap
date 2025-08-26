@@ -5,15 +5,13 @@ import { Drawer } from 'expo-router/drawer';
 import * as Updates from 'expo-updates';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import NotificationsBell from '../../components/notifications/NotificationsBell';
+import { useColors } from '../../lib/theme';
 
-// Minimal footer that shows version, channel, and short update id.
-// Uses only expo-constants and expo-updates to avoid extra deps.
 function VersionFooter() {
   const version = Constants.expoConfig?.version ?? 'dev';
   const channel =
-    // channel is defined when using EAS Updates with channels
-    (Updates as any)?.channel ||
-    (Updates?.isEmbeddedLaunch ? 'embedded' : 'dev');
+    (Updates as any)?.channel || (Updates?.isEmbeddedLaunch ? 'embedded' : 'dev');
   const shortId = Updates?.updateId ? Updates.updateId.slice(0, 8) : null;
 
   return (
@@ -27,10 +25,13 @@ function VersionFooter() {
 }
 
 function CustomDrawerContent(props: any) {
+  const c = useColors();
   return (
-    <DrawerContentScrollView {...props} contentContainerStyle={{ flex: 1 }}>
+    <DrawerContentScrollView
+      {...props}
+      contentContainerStyle={{ flex: 1, backgroundColor: c.bg }}
+    >
       <DrawerItemList {...props} />
-      {/* Push the footer to the bottom */}
       <View style={{ flex: 1 }} />
       <VersionFooter />
     </DrawerContentScrollView>
@@ -38,15 +39,33 @@ function CustomDrawerContent(props: any) {
 }
 
 export default function DrawerLayout() {
+  const c = useColors();
+
   return (
     <Drawer
-      screenOptions={{ headerShown: false, drawerType: 'front' }}
+      screenOptions={{
+        drawerType: 'front',
+        headerShown: true,
+        headerTitleAlign: 'left',
+
+        // Theme-aware header
+        headerStyle: { backgroundColor: c.card },
+        headerTitleStyle: { color: c.text },
+        headerTintColor: c.text, // hamburger/back chevrons
+
+        // Theme-aware drawer colors 
+        drawerStyle: { backgroundColor: c.bg },
+        drawerActiveTintColor: c.tint,
+        drawerInactiveTintColor: c.muted,
+        drawerActiveBackgroundColor: c.card,
+
+        // Bell on the top-right
+        headerRight: () => <NotificationsBell />,
+      }}
       drawerContent={(p) => <CustomDrawerContent {...p} />}
     >
-      {/* Tabs bundle */}
-      <Drawer.Screen name="(tabs)" options={{ title: 'Home', headerShown: false }} />
-      {/* Extra destination(s) in the hamburger */}
-      <Drawer.Screen name="myitems" options={{ title: 'My Listed Items', headerShown: true }} />
+      <Drawer.Screen name="(tabs)" options={{ title: 'Home' }} />
+      <Drawer.Screen name="myitems" options={{ title: 'My Listed Items' }} />
     </Drawer>
   );
 }

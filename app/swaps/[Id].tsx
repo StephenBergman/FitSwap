@@ -195,12 +195,12 @@ useEffect(() => {
         'Trade already resolved',
         'Looks like the other user canceled this trade'
       );
-      router.replace('/(tabs)/myswaps');
+      router.replace('/myswaps');
       return;
     }
 
     // success
-    router.replace('/(tabs)/myswaps');
+    router.replace('/myswaps');
   } catch (e: any) {
     // rollback and surface error
     setSwap(s => (s ? { ...s, status: prevStatus } : s));
@@ -233,7 +233,7 @@ useEffect(() => {
         .single();
 
       if (error || !data) throw error ?? new Error('No update returned');
-      router.replace('/(tabs)/myswaps');
+      router.replace('/myswaps');
     } catch (e: any) {
       setSwap((s) => (s ? { ...s, status: 'pending' } : s));
       Alert.alert('Deny failed', e?.message ?? 'Please try again.');

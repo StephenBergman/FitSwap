@@ -320,7 +320,7 @@ export default function HomeScreen() {
     );
   };
 
-  // ---------- Make the WHOLE screen scroll ----------
+  // ---------- Make the whole screen scroll ----------
   const ListHeader = useMemo(
     () => (
       <View>
@@ -403,7 +403,7 @@ export default function HomeScreen() {
         keyExtractor={(item) => String(item.id)}
         numColumns={numColumns}
         renderItem={renderItem}
-        // header makes the WHOLE page scroll
+        // header makes the whole page scroll
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 100 }}
         columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}

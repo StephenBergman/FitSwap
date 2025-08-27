@@ -7,14 +7,17 @@ import {
   FlatList,
   Image,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import FSButton from '../../../components/buttons/FSButton';
+import FSInput from '../../../components/buttons/FSInput';
+
 import { emit, on } from '../../../lib/eventBus';
 import { supabase } from '../../../lib/supabase';
 import { useColors } from '../../../lib/theme';
@@ -29,12 +32,7 @@ function HomeBanner({
 }) {
   const c = useColors();
   return (
-    <View
-      style={[
-        styles.banner,
-        { backgroundColor: c.card, borderColor: c.border, borderWidth: 1 },
-      ]}
-    >
+    <View style={[styles.banner, { backgroundColor: c.card, borderColor: c.border }]}>
       <View style={[styles.blobA, { backgroundColor: 'rgba(253,230,138,0.25)' }]} />
       <View style={[styles.blobB, { backgroundColor: 'rgba(94,234,212,0.22)' }]} />
 
@@ -44,24 +42,14 @@ function HomeBanner({
           Trade for outfits you love. Zero cost. Zero clutter.
         </Text>
 
-        <View style={styles.ctaRow}>
-          <TouchableOpacity
-            style={[styles.ctaPrimary, { backgroundColor: c.tint }]}
-            onPress={onExplore}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.ctaPrimaryText}>Explore swaps</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.ctaGhost, { borderColor: c.tint }]}
-            onPress={onListItem}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.ctaGhostText, { color: c.tint }]}>List an item</Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+          <View style={{ flexGrow: 0, minWidth: 140 }}>
+            <FSButton title="Explore swaps" onPress={onExplore} />
+          </View>
+          <View style={{ flexGrow: 0, minWidth: 130 }}>
+            <FSButton title="List an item" variant="secondary" onPress={onListItem} />
+          </View>
         </View>
-
         <View style={styles.badgesRow}>
           <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
             <Text style={[styles.badgeText, { color: c.muted }]}>No fees</Text>
@@ -297,6 +285,8 @@ export default function HomeScreen() {
           onPress={() => toggleWishlist(item.id)}
           style={[styles.heartButton, { backgroundColor: c.card, borderColor: c.border }]}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={wished ? 'Remove from wishlist' : 'Add to wishlist'}
         >
           <Ionicons name={wished ? 'heart' : 'heart-outline'} size={20} color={wished ? '#EF4444' : c.text} />
         </TouchableOpacity>
@@ -305,7 +295,7 @@ export default function HomeScreen() {
           <Image
             source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
             style={styles.image}
-            resizeMode="contain"
+            resizeMode="cover" // tighter card; swap to "contain" if you prefer
           />
           <View style={styles.cardContent}>
             <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
@@ -326,22 +316,29 @@ export default function HomeScreen() {
       <View>
         <HomeBanner onExplore={() => router.push('/home')} onListItem={() => router.push('/swap')} />
 
-        <View style={styles.searchRow}>
-          <TextInput
+        {/* Search */}
+        <View style={{ paddingHorizontal: 8, marginBottom: 8 }}>
+          <FSInput
+            placeholder="Search items…"
             value={query}
             onChangeText={setQuery}
-            placeholder="Search items…"
-            placeholderTextColor={c.muted}
-            style={[styles.searchInput, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
             returnKeyType="search"
+            endAdornment={
+              !!query ? (
+                <Text
+                  onPress={() => setQuery('')}
+                  style={{ color: c.muted, fontWeight: '600', paddingHorizontal: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  Clear
+                </Text>
+              ) : null
+            }
           />
-          {!!query && (
-            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
-              <Text style={[styles.clearTxt, { color: c.muted }]}>Clear</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
+        {/* Sort chips */}
         <View style={styles.chipsRow}>
           {(['newest', 'oldest'] as const).map((opt) => {
             const active = sort === opt;
@@ -354,6 +351,8 @@ export default function HomeScreen() {
                   { backgroundColor: c.card, borderColor: c.border },
                   active && { backgroundColor: c.tint, borderColor: c.tint },
                 ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.chipTxt, { color: c.text }, active && styles.chipTxtActive]}>
                   {opt === 'newest' ? 'Newest' : 'Oldest'}
@@ -363,6 +362,7 @@ export default function HomeScreen() {
           })}
         </View>
 
+        {/* Filters */}
         <View style={styles.chipsRow}>
           <TouchableOpacity
             onPress={() => setOnlyWishlisted((v) => !v)}
@@ -371,8 +371,12 @@ export default function HomeScreen() {
               { backgroundColor: c.card, borderColor: c.border },
               onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
             ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: onlyWishlisted }}
           >
-            <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>Wishlisted</Text>
+            <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>
+              Wishlisted
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -382,8 +386,12 @@ export default function HomeScreen() {
               { backgroundColor: c.card, borderColor: c.border },
               withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
             ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: withImagesOnly }}
           >
-            <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>With image</Text>
+            <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>
+              With image
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -403,13 +411,12 @@ export default function HomeScreen() {
         keyExtractor={(item) => String(item.id)}
         numColumns={numColumns}
         renderItem={renderItem}
-        // header makes the whole page scroll
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 100 }}
         columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
         ListEmptyComponent={
           <Text style={[styles.emptyText, { color: c.muted }]}>
-            {loading ? 'Loading…' : 'No items found. Try uploading some!'}
+            {loading ? 'Loading…' : 'No items found.'}
           </Text>
         }
         showsVerticalScrollIndicator={false}
@@ -423,7 +430,6 @@ const styles = StyleSheet.create({
   // --- Banner ---
   banner: {
     position: 'relative',
-    backgroundColor: '#FFF4F7',
     borderRadius: 16,
     paddingVertical: 24,
     marginHorizontal: Platform.select({ web: 4, default: 8 }),
@@ -438,40 +444,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 10,
   },
-  brand: { fontSize: 32, fontWeight: '800', letterSpacing: 0.5, color: '#0F172A' },
-  tagline: { fontSize: 16, color: '#334155', maxWidth: 680 },
-  ctaRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  ctaPrimary: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#06B6D4' },
-  ctaPrimaryText: { color: '#fff', fontWeight: '700' },
-  ctaGhost: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#06B6D4',
-  },
-  ctaGhostText: { color: '#06B6D4', fontWeight: '700' },
+  brand: { fontSize: 32, fontWeight: '800', letterSpacing: 0.5 },
+  tagline: { fontSize: 16, maxWidth: 680 },
   badgesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   badge: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  badgeText: { fontSize: 12, color: '#334155', fontWeight: '600' },
-  blobA: { position: 'absolute', width: 220, height: 220, borderRadius: 999, backgroundColor: '#FDE68A55', top: -60, right: -40 },
-  blobB: { position: 'absolute', width: 180, height: 180, borderRadius: 999, backgroundColor: '#5EEAD455', bottom: -50, left: -30 },
+  badgeText: { fontSize: 12, fontWeight: '600' },
+  blobA: {
+    position: 'absolute', width: 220, height: 220, borderRadius: 999,
+    backgroundColor: '#FDE68A55', top: -60, right: -40,
+  },
+  blobB: {
+    position: 'absolute', width: 180, height: 180, borderRadius: 999,
+    backgroundColor: '#5EEAD455', bottom: -50, left: -30,
+  },
 
   // --- List/Grid ---
-  emptyText: { textAlign: 'center', color: '#666', marginTop: 50, fontSize: 16 },
+  emptyText: { textAlign: 'center', marginTop: 50, fontSize: 16 },
 
   // --- Cards ---
   card: {
     flex: 1,
-    backgroundColor: '#fff',
     borderRadius: 12,
     margin: 1,
     overflow: 'hidden',
@@ -480,6 +477,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 3,
     elevation: 2,
+    borderWidth: 1,
   },
   image: {
     width: '100%',
@@ -494,8 +492,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  title: { fontSize: 14, fontWeight: '600', color: '#222' },
-  description: { fontSize: 12, color: '#666', marginTop: 4 },
+  title: { fontSize: 14, fontWeight: '600' },
+  description: { fontSize: 12, marginTop: 4 },
 
   // --- Heart overlay ---
   heartButton: {
@@ -503,9 +501,14 @@ const styles = StyleSheet.create({
     zIndex: 2,
     right: 8,
     top: 8,
-    padding: 8,
+    width: 40,
+    height: 40,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 1 },
@@ -514,29 +517,13 @@ const styles = StyleSheet.create({
   },
 
   // --- Search & Sort ---
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 8 },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderColor: '#E5E7EB',
-    borderWidth: 1,
-  },
-  clearBtn: { paddingVertical: 10, paddingHorizontal: 12 },
-  clearTxt: { color: '#64748B', fontWeight: '600' },
-
   chipsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 8, marginBottom: 8 },
   chip: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#fff',
   },
-  chipActive: { backgroundColor: '#0ea5e9', borderColor: '#0ea5e9' },
-  chipTxt: { color: '#334155', fontWeight: '600' },
+  chipTxt: { fontWeight: '600' },
   chipTxtActive: { color: '#fff' },
 });

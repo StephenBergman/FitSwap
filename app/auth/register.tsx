@@ -1,6 +1,6 @@
 // app/register.tsx
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -8,17 +8,21 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import FSButton from '../../components/buttons/FSButton';
+import FSInput from '../../components/buttons/FSInput';
 import { supabase } from '../../lib/supabase';
+import { useColors } from '../../lib/theme';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const c = useColors();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+
+  const styles = useMemo(() => makeStyles(c), [c]);
 
   const handleRegister = async () => {
     if (!email || !password) {
@@ -44,10 +48,8 @@ export default function RegisterScreen() {
         <View style={styles.container}>
           <Text style={styles.title}>Create an Account</Text>
 
-          <TextInput
-            style={styles.input}
+          <FSInput
             placeholder="Email"
-            placeholderTextColor="#999"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -56,110 +58,64 @@ export default function RegisterScreen() {
             value={email}
             onChangeText={setEmail}
             returnKeyType="next"
-            multiline={false}
-            numberOfLines={1}
-            textAlignVertical="center"
           />
 
-          <View style={styles.pwRow}>
-            <TextInput
-              /* Force remount on toggle so Android redraws correctly */
-              key={showPw ? 'pw-text' : 'pw-secure'}
-              style={[styles.input, styles.pwInput, Platform.OS === 'android' ? styles.androidPwFont : null]}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              keyboardType="default"            
-              secureTextEntry={!showPw}         
-              textContentType="newPassword"
-              autoComplete="password-new"
-              importantForAutofill="yes"
-              value={password}
-              onChangeText={setPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleRegister}
-              multiline={false}
-              numberOfLines={1}
-              textAlignVertical="center"
-            />
-            <TouchableOpacity style={styles.pwToggle} onPress={() => setShowPw((v) => !v)}>
-              <Text style={styles.pwToggleText}>{showPw ? 'Hide' : 'Show'}</Text>
-            </TouchableOpacity>
-          </View>
+          <FSInput
+            key={showPw ? 'pw-text' : 'pw-secure'} // Android redraw on toggle
+            placeholder="Password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            keyboardType="default"
+            secureTextEntry={!showPw}
+            textContentType="newPassword"
+            autoComplete="password-new"
+            importantForAutofill="yes"
+            value={password}
+            onChangeText={setPassword}
+            returnKeyType="done"
+            onSubmitEditing={handleRegister}
+            endAdornment={
+              <Text
+                onPress={() => setShowPw(v => !v)}
+                style={{ color: c.accent ?? c.tint, fontWeight: '700', paddingHorizontal: 8 }}
+              >
+                {showPw ? 'Hide' : 'Show'}
+              </Text>
+            }
+          />
 
-          <TouchableOpacity style={styles.button} onPress={handleRegister}>
-            <Text style={styles.buttonText}>Register</Text>
-          </TouchableOpacity>
+          <FSButton title="Register" onPress={handleRegister} />
 
-          <TouchableOpacity onPress={() => router.replace('/auth/login')} style={styles.secondaryButton}>
-            <Text style={styles.secondaryText}>Already have an account? Log in</Text>
-          </TouchableOpacity>
+          <Text
+            onPress={() => router.replace('/auth/login')}
+            style={styles.link}
+          >
+            Already have an account? Log in
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const INPUT_H = 48;
-
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f8fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 30,
-    paddingBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 32,
-    fontWeight: '600',
-    color: '#333',
-  },
-  input: {
-    height: INPUT_H,
-    minHeight: INPUT_H,
-    maxHeight: INPUT_H,
-    width: '100%',
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-    fontSize: 16,
-    lineHeight: 20,
-    marginBottom: 16,
-    color: '#111',
-  },
-  pwRow: { width: '100%', position: 'relative', marginBottom: 16 },
-  pwInput: { paddingRight: 54, marginBottom: 0 },
-  /* Use system font on Android to avoid rare masking glitches */
-  androidPwFont: { fontFamily: 'sans-serif', letterSpacing: 0 },
-  pwToggle: {
-    position: 'absolute',
-    right: 10,
-    top: 0,
-    height: INPUT_H,
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  pwToggleText: { color: '#007AFF', fontWeight: '600' },
-  button: {
-    width: '100%',
-    height: INPUT_H,
-    backgroundColor: '#34C759',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: '500' },
-  secondaryButton: { marginTop: 18 },
-  secondaryText: { color: '#007AFF', fontSize: 16 },
-});
+const makeStyles = (c: ReturnType<typeof useColors>) =>
+  StyleSheet.create({
+    scroll: { flexGrow: 1 },
+    container: {
+      flex: 1,
+      backgroundColor: c.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 28,
+      paddingBottom: 24,
+    },
+    title: {
+      fontSize: 28,
+      marginBottom: 28,
+      fontWeight: '700',
+      color: c.text,
+      letterSpacing: 0.2,
+    },
+    link: { marginTop: 18, color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
+  });

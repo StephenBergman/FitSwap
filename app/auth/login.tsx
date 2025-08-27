@@ -8,16 +8,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import FSButton from '../../components/buttons/FSButton';
+import FSInput from '../../components/buttons/FSInput';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const c = useColors(); // themed colors
+  const c = useColors();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -44,10 +44,8 @@ export default function LoginScreen() {
         <View style={styles.container}>
           <Text style={styles.title}>Log in to FitSwap</Text>
 
-          <TextInput
-            style={styles.input}
+          <FSInput
             placeholder="Email"
-            placeholderTextColor={c.muted}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -58,44 +56,45 @@ export default function LoginScreen() {
             returnKeyType="next"
           />
 
-          <View style={styles.pwRow}>
-            <TextInput
-              key={showPw ? 'pw-text' : 'pw-secure'} // force remount for Android
-              style={[styles.input, styles.pwInput, Platform.OS === 'android' ? styles.androidPwFont : null]}
-              placeholder="Password"
-              placeholderTextColor={c.muted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              keyboardType="default" // keep masking correct on Android
-              secureTextEntry={!showPw}
-              textContentType="password"
-              autoComplete="password"
-              importantForAutofill="yes"
-              value={password}
-              onChangeText={setPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-            <TouchableOpacity onPress={() => setShowPw(v => !v)} style={styles.pwToggle}>
-              <Text style={styles.pwToggleText}>{showPw ? 'Hide' : 'Show'}</Text>
-            </TouchableOpacity>
-          </View>
+          <FSInput
+            // key swap keeps Android masking correct when toggling
+            key={showPw ? 'pw-text' : 'pw-secure'}
+            placeholder="Password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            keyboardType="default"
+            secureTextEntry={!showPw}
+            textContentType="password"
+            autoComplete="password"
+            importantForAutofill="yes"
+            value={password}
+            onChangeText={setPassword}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            endAdornment={
+              <Text
+                onPress={() => setShowPw(v => !v)}
+                style={{ color: c.accent ?? c.tint, fontWeight: '700', paddingHorizontal: 8 }}
+              >
+                {showPw ? 'Hide' : 'Show'}
+              </Text>
+            }
+          />
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.9}>
-            <Text style={styles.buttonText}>Log In</Text>
-          </TouchableOpacity>
+          <FSButton title="Log In" onPress={handleLogin} />
 
-          <TouchableOpacity onPress={() => router.push('/auth/register')} style={styles.secondaryButton}>
-            <Text style={styles.secondaryText}>Don’t have an account? Register</Text>
-          </TouchableOpacity>
+          <Text
+            onPress={() => router.push('/auth/register')}
+            style={styles.link}
+          >
+            Don’t have an account? Register
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const INPUT_H = 52;
 
 const makeStyles = (c: ReturnType<typeof useColors>) =>
   StyleSheet.create({
@@ -115,49 +114,5 @@ const makeStyles = (c: ReturnType<typeof useColors>) =>
       color: c.text,
       letterSpacing: 0.2,
     },
-    input: {
-      height: INPUT_H,
-      width: '100%',
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      backgroundColor: c.card,
-      paddingHorizontal: 14,
-      fontSize: 16,
-      lineHeight: 20,
-      color: c.text,
-      marginBottom: 16,
-      shadowColor: 'rgba(0,0,0,0.06)',
-      shadowOpacity: Platform.OS === 'ios' ? 1 : 0,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-    },
-    pwRow: {
-      width: '100%',
-      position: 'relative',
-      marginBottom: 16,
-    },
-    pwInput: { paddingRight: 58, marginBottom: 0 },
-    androidPwFont: { fontFamily: 'sans-serif', letterSpacing: 0 },
-    pwToggle: {
-      position: 'absolute',
-      right: 10,
-      top: 0,
-      height: INPUT_H,
-      justifyContent: 'center',
-      paddingHorizontal: 6,
-    },
-    pwToggleText: { color: c.accent ?? c.tint, fontWeight: '700' },
-    button: {
-      width: '100%',
-      height: INPUT_H,
-      backgroundColor: c.tint, // primary
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 12,
-    },
-    buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-    secondaryButton: { marginTop: 18 },
-    secondaryText: { color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
+    link: { marginTop: 18, color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
   });

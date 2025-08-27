@@ -58,6 +58,10 @@ export const lightColors = {
   border: '#E9D8E8',   // subtle lilac
   tint: '#D74B76',     // raspberry primary
   accent: '#2FB7A3',   // teal accent
+  success: '#22C55E',
+  warning: '#F59E0B',
+  danger:  '#EF4444',
+  overlay: 'rgba(0,0,0,0.06)',
 };
 
 export const darkColors = {
@@ -68,10 +72,22 @@ export const darkColors = {
   border: '#2A2F3A',
   tint: '#E06A93',     // raspberry (dark)
   accent: '#43C6B2',   // teal (dark)
+  success: '#22C55E',
+  warning: '#F59E0B',
+  danger:  '#F87171',
+  overlay: 'rgba(0,0,0,0.35)',
 };
 
 
-
+export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
+export const type = {
+  titleXL: { size: 28, lineHeight: 34, weight: '700' as const },
+  title:   { size: 22, lineHeight: 28, weight: '700' as const },
+  body:    { size: 16, lineHeight: 24, weight: '400' as const },
+  label:   { size: 14, lineHeight: 20, weight: '600' as const },
+  cap:     { size: 12, lineHeight: 16, weight: '500' as const },
+};
 
 export function useColors() {
   const { resolvedScheme } = useTheme();

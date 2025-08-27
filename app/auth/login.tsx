@@ -1,6 +1,6 @@
 // app/login.tsx
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -13,12 +13,16 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { useColors } from '../../lib/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const c = useColors(); // themed colors
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+
+  const styles = useMemo(() => makeStyles(c), [c]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,12 +42,12 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.container}>
-          <Text style={styles.title}>Login to FitSwap</Text>
+          <Text style={styles.title}>Log in to FitSwap</Text>
 
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#999"
+            placeholderTextColor={c.muted}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -56,16 +60,14 @@ export default function LoginScreen() {
 
           <View style={styles.pwRow}>
             <TextInput
-              /* changing the key forces a remount so Android correctly re-renders masked/unmasked */
-              key={showPw ? 'pw-text' : 'pw-secure'}
+              key={showPw ? 'pw-text' : 'pw-secure'} // force remount for Android
               style={[styles.input, styles.pwInput, Platform.OS === 'android' ? styles.androidPwFont : null]}
               placeholder="Password"
-              placeholderTextColor="#999"
+              placeholderTextColor={c.muted}
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
-              /* DO NOT use keyboardType="visible-password" — it overrides masking on Android */
-              keyboardType="default"
+              keyboardType="default" // keep masking correct on Android
               secureTextEntry={!showPw}
               textContentType="password"
               autoComplete="password"
@@ -75,12 +77,12 @@ export default function LoginScreen() {
               returnKeyType="done"
               onSubmitEditing={handleLogin}
             />
-            <TouchableOpacity onPress={() => setShowPw((v) => !v)} style={styles.pwToggle}>
+            <TouchableOpacity onPress={() => setShowPw(v => !v)} style={styles.pwToggle}>
               <Text style={styles.pwToggleText}>{showPw ? 'Hide' : 'Show'}</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
+          <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.9}>
             <Text style={styles.buttonText}>Log In</Text>
           </TouchableOpacity>
 
@@ -93,67 +95,69 @@ export default function LoginScreen() {
   );
 }
 
-const INPUT_H = 48;
+const INPUT_H = 52;
 
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f8fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 30,
-    paddingBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 32,
-    fontWeight: '600',
-    color: '#333',
-  },
-  input: {
-    height: INPUT_H,
-    width: '100%',
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    fontSize: 16,
-    lineHeight: 20,
-    color: '#111',
-    marginBottom: 16,
-  },
-  pwRow: {
-    width: '100%',
-    position: 'relative',
-    marginBottom: 16,
-  },
-  pwInput: { paddingRight: 54, marginBottom: 0 },
-  /* Use a system font on Android to avoid odd masking glitches in some OEM keyboards */
-  androidPwFont: {
-    fontFamily: 'sans-serif',
-    letterSpacing: 0,
-  },
-  pwToggle: {
-    position: 'absolute',
-    right: 10,
-    top: 0,
-    height: INPUT_H,
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  pwToggleText: { color: '#007AFF', fontWeight: '600' },
-  button: {
-    width: '100%',
-    height: INPUT_H,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: '500' },
-  secondaryButton: { marginTop: 18 },
-  secondaryText: { color: '#007AFF', fontSize: 16 },
-});
+const makeStyles = (c: ReturnType<typeof useColors>) =>
+  StyleSheet.create({
+    scroll: { flexGrow: 1 },
+    container: {
+      flex: 1,
+      backgroundColor: c.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 28,
+      paddingBottom: 24,
+    },
+    title: {
+      fontSize: 28,
+      marginBottom: 28,
+      fontWeight: '700',
+      color: c.text,
+      letterSpacing: 0.2,
+    },
+    input: {
+      height: INPUT_H,
+      width: '100%',
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      backgroundColor: c.card,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      lineHeight: 20,
+      color: c.text,
+      marginBottom: 16,
+      shadowColor: 'rgba(0,0,0,0.06)',
+      shadowOpacity: Platform.OS === 'ios' ? 1 : 0,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+    },
+    pwRow: {
+      width: '100%',
+      position: 'relative',
+      marginBottom: 16,
+    },
+    pwInput: { paddingRight: 58, marginBottom: 0 },
+    androidPwFont: { fontFamily: 'sans-serif', letterSpacing: 0 },
+    pwToggle: {
+      position: 'absolute',
+      right: 10,
+      top: 0,
+      height: INPUT_H,
+      justifyContent: 'center',
+      paddingHorizontal: 6,
+    },
+    pwToggleText: { color: c.accent ?? c.tint, fontWeight: '700' },
+    button: {
+      width: '100%',
+      height: INPUT_H,
+      backgroundColor: c.tint, // primary
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 12,
+    },
+    buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+    secondaryButton: { marginTop: 18 },
+    secondaryText: { color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
+  });

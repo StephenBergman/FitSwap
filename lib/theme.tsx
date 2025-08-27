@@ -47,23 +47,31 @@ export function useTheme() {
   return ctx;
 }
 
-/** App colors (keep this tiny) */
+
+// Warm raspberry primary (tint) + fresh teal accent.
+// Soft blush background in light; deep slate in dark.
 export const lightColors = {
-  bg: '#ffffff',
-  card: '#ffffff',
-  text: '#0b1220',
-  muted: '#6b7280',
-  border: '#e5e7eb',
-  tint: '#0ea5e9',
+  bg: '#FFF7FA',       // soft blush
+  card: '#FFFFFF',
+  text: '#1F2937',     // slate-800
+  muted: '#6B7280',    // slate-500
+  border: '#E9D8E8',   // subtle lilac
+  tint: '#D74B76',     // raspberry primary
+  accent: '#2FB7A3',   // teal accent
 };
+
 export const darkColors = {
-  bg: '#0b1220',
-  card: '#111827',
-  text: '#e5e7eb',
-  muted: '#9ca3af',
-  border: '#1f2937',
-  tint: '#38bdf8',
+  bg: '#0F1115',
+  card: '#151821',
+  text: '#E5E7EB',
+  muted: '#9CA3AF',
+  border: '#2A2F3A',
+  tint: '#E06A93',     // raspberry (dark)
+  accent: '#43C6B2',   // teal (dark)
 };
+
+
+
 
 export function useColors() {
   const { resolvedScheme } = useTheme();

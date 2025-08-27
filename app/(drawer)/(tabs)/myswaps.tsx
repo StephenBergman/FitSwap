@@ -173,7 +173,7 @@ export default function MySwapsScreen() {
     }, 200);
   }, [loadSwaps]);
 
-  // Realtime: subscribe to swaps where the user is sender OR receiver
+  // Realtime: subscribe to swaps where the user is sender or receiver
   useEffect(() => {
     if (!userId) return;
 

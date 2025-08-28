@@ -2,12 +2,12 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import FSButton from '../../../components/buttons/FSButton';
-import DevPanel from '../../../components/dev/devpanel';
-import { pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
-import { registerDeviceTokenIfAllowed, setPushPref } from '../../../lib/notifications/push';
-import { supabase } from '../../../lib/supabase';
-import { radius, spacing, type as tt, useColors, useTheme } from '../../../lib/theme';
+import FSButton from '../../components/buttons/FSButton';
+import DevPanel from '../../components/dev/devpanel';
+import { pageWrap, WEB_MAX_WIDTH } from '../../lib/layout';
+import { registerDeviceTokenIfAllowed, setPushPref } from '../../lib/notifications/push';
+import { supabase } from '../../lib/supabase';
+import { radius, spacing, type as tt, useColors, useTheme } from '../../lib/theme';
 
 export default function SettingsScreen() {
   const { scheme, setScheme } = useTheme();

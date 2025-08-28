@@ -218,7 +218,7 @@ export default function MyItemsScreen() {
           <Image
             source={{ uri: item.image_url || 'https://via.placeholder.com/300x400.png?text=No+Image' }}
             style={[styles.thumb, { backgroundColor: '#eee' }]}
-            resizeMode="cover"
+            resizeMode="contain"
             accessibilityLabel={item.title || 'Listed item'}
           />
           <View style={{ flex: 1 }}>

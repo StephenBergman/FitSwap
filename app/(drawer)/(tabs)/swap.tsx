@@ -1,11 +1,10 @@
- // app/(tabs)/swap.tsx
+// app/(tabs)/swap.tsx
+import { decode as atob } from 'base-64';
 import * as FileSystem from 'expo-file-system';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   StyleSheet,
@@ -14,20 +13,29 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { pickAndCropImage } from '../../../components/media/pickAndCropImage';
+import { useToast } from '../../../components/toast/ToastProvider';
 import { pageWrap, WEB_NARROW } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
 import { useColors } from '../../../lib/theme';
 
+// Convert a local file URI to bytes/Blob (same approach as the profile screen)
 const b64ToUint8 = (b64: string) => {
-  const binary = global.atob ? global.atob(b64) : Buffer.from(b64, 'base64').toString('binary');
-  const len = binary.length;
+  const bin = atob(b64);
+  const len = bin.length;
   const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+};
+const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
+  if (Platform.OS === 'web') return await (await fetch(uri)).blob();
+  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  return b64ToUint8(base64);
 };
 
 export default function SwapScreen() {
   const c = useColors();
+  const toast = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tradeFor, setTradeFor] = useState('');
@@ -35,41 +43,21 @@ export default function SwapScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // Ask for media-library permission and let user pick an image
+ 
   const pickImage = async () => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow photo access to pick an image.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      });
-
-      if (!result.canceled) setImageUri(result.assets[0].uri);
+      const res = await pickAndCropImage({ aspect: [1, 1], quality: 0.9 });
+      if (!res) return; // user canceled or permission denied
+      setImageUri(res.uri);
     } catch (err) {
       console.error('[ImagePicker ERROR]', err);
-      Alert.alert('Image Picker Error', 'Unable to open image picker.');
+      toast({ message: 'Unable to open image picker.' });
     }
-  };
-
-  const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
-    if (Platform.OS === 'web') {
-      // web Blob is fine
-      return await (await fetch(uri)).blob();
-    }
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return b64ToUint8(base64); 
   };
 
   const uploadAndSubmit = async () => {
-    if (!imageUri || !title || !description || !tradeFor) {
-      Alert.alert('Missing info', 'Please fill out all fields and select an image.');
+    if (!imageUri || !title.trim() || !description.trim() || !tradeFor.trim()) {
+      toast({ message: 'Please fill out all fields and select an image.' });
       return;
     }
 
@@ -84,16 +72,17 @@ export default function SwapScreen() {
       // Make a user-scoped filename to avoid collisions
       const filename = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
 
-      // Upload image to Supabase Storage (user-photos bucket)
-      const blob = await toBytes(imageUri);
+      // Convert local URI to bytes/blob before upload
+      const bytes = await toBytes(imageUri);
+
+      // Upload image to Supabase Storage
       const { error: upErr } = await supabase
         .storage
         .from('user-photos')
-        .upload(filename, blob, { contentType: 'image/jpeg', upsert: true });
-
+        .upload(filename, bytes, { contentType: 'image/jpeg', upsert: true });
       if (upErr) throw upErr;
 
-      // Get a public URL for the stored image (works if bucket is public)
+      // Get a public URL for the stored image
       const { data: pub } = supabase.storage.from('user-photos').getPublicUrl(filename);
       const publicUrl = pub.publicUrl;
 
@@ -105,10 +94,11 @@ export default function SwapScreen() {
         image_url: publicUrl,
         trade_for: tradeFor,
       }]);
-
       if (insertError) throw insertError;
 
-      Alert.alert('Success', 'Item listed for trade!');
+      // Success feedback via toast
+      toast({ message: 'Item listed for trade!' });
+
       setTitle('');
       setDescription('');
       setTradeFor('');
@@ -116,7 +106,7 @@ export default function SwapScreen() {
       router.replace('/(drawer)/(tabs)/home');
     } catch (err: any) {
       console.error('[UPLOAD ERROR]', err);
-      Alert.alert('Error', err.message || 'Something went wrong.');
+      toast({ message: err?.message || 'Something went wrong.' });
     } finally {
       setLoading(false);
     }
@@ -187,7 +177,7 @@ export default function SwapScreen() {
 }
 
 const styles = StyleSheet.create({
-  // no horizontal padding here; pageWrap already does that on web.
+  // no horizontal padding here; pageWrap already does that on web
   container: { paddingVertical: 20, flex: 1 },
 
   imagePicker: {
@@ -219,14 +209,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  previewBox: { 
-    width: '100%', 
-    height: '100%', 
-    justifyContent: 'center', 
-    alignItems: 'center' },
+  previewBox: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
 
-  buttonText: { 
-    color: '#fff', 
-    fontSize: 16, 
-    fontWeight: '600' },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
 });

@@ -1,6 +1,6 @@
 // app/product/[ProductId].tsx
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import AddToWishlistButton from '../../components/wishlist/AddToWishlistButton';
+import FSButton from '../../components/buttons/FSButton';
+import { useToast } from '../../components/toast/ToastProvider';
+import { emit } from '../../lib/eventBus';
 import { pageContent, WEB_NARROW } from '../../lib/layout';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
@@ -29,9 +31,14 @@ export default function ProductDetailsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const c = useColors();
+  const toast = useToast();
 
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // wishlist state for this user+item
+  const [wishId, setWishId] = useState<string | null>(null);
+  const [wlBusy, setWlBusy] = useState(false);
 
   useEffect(() => {
     if (ProductId) fetchItem();
@@ -55,9 +62,22 @@ export default function ProductDetailsScreen() {
       }
 
       setItem(data as Item);
-      // set a nice header title for this screen
-      // (overrides the default "Item" from the root stack)
       navigation.setOptions?.({ title: data.title || 'Item' });
+
+      // initialize wishlist state
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (uid) {
+        const { data: w } = await supabase
+          .from('wishlist')
+          .select('id')
+          .eq('user_id', uid)
+          .eq('item_id', data.id)
+          .maybeSingle();
+        setWishId(w?.id ?? null);
+      } else {
+        setWishId(null);
+      }
     } catch (e: any) {
       console.error('Error fetching item:', e?.message ?? e);
       Alert.alert('Error', e?.message ?? 'Failed to load item.');
@@ -71,6 +91,47 @@ export default function ProductDetailsScreen() {
     router.push({ pathname: '/offer/offerscreen', params: { id: item.id } });
   };
 
+  const toggleWishlist = useCallback(async () => {
+    if (!item || wlBusy) return;
+    setWlBusy(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Please sign in', 'You need to be logged in to use the wishlist.');
+        return;
+      }
+
+      // Remove if already there
+      if (wishId) {
+        const { error } = await supabase.from('wishlist').delete().eq('id', wishId);
+        if (error) throw error;
+        setWishId(null);
+        emit('wishlist:changed');
+        toast({ message: 'Removed from wishlist' });
+        return;
+      }
+
+      // Otherwise insert
+      const { data, error } = await supabase
+        .from('wishlist')
+        .insert({ user_id: user.id, item_id: item.id })
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      setWishId(data.id);
+      emit('wishlist:changed');
+      toast({ message: 'Added to wishlist' });
+    } catch (e: any) {
+      console.error('[Wishlist error]', e);
+      Alert.alert('Wishlist error', e?.message ?? 'Please try again.');
+    } finally {
+      setWlBusy(false);
+    }
+  }, [item, wishId, wlBusy, toast]);
+
   if (loading || !item) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: c.bg }]}>
@@ -78,6 +139,10 @@ export default function ProductDetailsScreen() {
       </View>
     );
   }
+
+  // Hide wishlist button if the item belongs to the current user 
+  // You can remove this block if you want it always visible.
+  // const isMine = item.user_id === supabase.auth.getUser()?.data.user?.id
 
   return (
     <ScrollView
@@ -106,11 +171,14 @@ export default function ProductDetailsScreen() {
         </Text>
 
         <View style={styles.actions}>
-          <Text onPress={handleRequestSwap} style={[styles.primaryBtn, { backgroundColor: c.tint }]}>
-            Request a swap
-          </Text>
+          <FSButton title="Request a swap" onPress={handleRequestSwap} variant="primary" />
 
-          <AddToWishlistButton itemId={item.id} />
+          <FSButton
+            title={wishId ? 'Remove from Wishlist' : 'Add to Wishlist'}
+            onPress={toggleWishlist}
+            variant={wishId ? 'danger' : 'secondary'}
+            disabled={wlBusy}
+          />
         </View>
       </View>
     </ScrollView>
@@ -165,14 +233,5 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: 4,
     gap: 10,
-  },
-
-  primaryBtn: {
-    textAlign: 'center',
-    color: '#fff',
-    fontWeight: '700',
-    paddingVertical: 14,
-    borderRadius: 10,
-    overflow: 'hidden',
   },
 });

@@ -89,7 +89,7 @@ export default function NotificationsPanel({
             <Image
               source={{ uri: d.thumb }}
               style={[styles.thumb, { backgroundColor: c.bg, borderColor: c.border }]}
-              resizeMode="cover"
+              resizeMode="contain"
             />
           ) : (
             <View

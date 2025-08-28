@@ -2,9 +2,10 @@
 // Works on web + iOS/Android (Hermes) without polyfills.
 
 export type Events =
-  | 'items:changed'       // e.g. after delisting
-  | 'wishlist:changed'    // e.g. after toggling wishlist
-  | 'swaps:changed';      
+  | 'items:changed'      // e.g. after delisting
+  | 'wishlist:changed'   // e.g. after toggling wishlist
+  | 'swaps:changed'
+  | 'profile:changed';   // e.g. after avatar/name/bio update
 
 type Handler = () => void;
 
@@ -14,7 +15,7 @@ export function emit(type: Events) {
   const set = listeners.get(type);
   if (!set) return;
   // Copy to avoid mutation during iteration
-  [...set].forEach((fn) => {
+  Array.from(set).forEach(fn => {
     try { fn(); } catch (e) { console.error('[eventBus handler error]', e); }
   });
 }
@@ -26,7 +27,7 @@ export function on(type: Events, handler: Handler) {
     listeners.set(type, set);
   }
   set.add(handler);
-  // return unsubscribe
+  // unsubscribe
   return () => {
     const s = listeners.get(type);
     if (!s) return;

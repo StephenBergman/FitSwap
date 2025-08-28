@@ -1,16 +1,18 @@
-// components/FSButton.tsx
+// components/buttons/FSButton.tsx
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import { useColors } from '../../lib/theme';
 
+type Variant = 'primary' | 'secondary' | 'danger' | 'success' | 'ghost';
+
 type Props = {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' 
+  variant?: Variant;
   style?: ViewStyle;
   disabled?: boolean;
-  size?: 'sm' | 'md' | 'lg'; 
-  block?: boolean;           
+  size?: 'sm' | 'md' | 'lg';
+  block?: boolean;
 };
 
 export default function FSButton({
@@ -45,7 +47,7 @@ export default function FSButton({
 
 const styles = (
   c: any,
-  v: 'primary' | 'secondary' | 'danger' | 'ghost',
+  v: Variant,
   disabled?: boolean,
   sz?: { H: number; FS: number; R: number; PX: number },
   block?: boolean
@@ -57,14 +59,21 @@ const styles = (
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: sz?.PX ?? 18,
-      width: block ? '100%' : undefined, // full-width by default
+      width: block ? '100%' : undefined,
+
+      // background by variant
       backgroundColor:
-        v === 'primary' ? c.tint :
-        v === 'secondary' ? 'transparent' :
-        v === 'danger' ? c.danger :
+        v === 'success'   ? '#15803D' : 
+        v === 'danger'    ? c.danger   :
+        v === 'primary'   ? c.tint     :
         'transparent',
+
+      // border by variant
       borderWidth: v === 'secondary' ? 1 : 0,
-      borderColor: v === 'secondary' ? (c.accent ?? c.tint) : 'transparent',
+      borderColor: v === 'secondary' ? (c.accent ?? c.tint) :
+                  v === 'ghost'      ? 'transparent' :
+                  'transparent',
+
       opacity: disabled ? 0.6 : 1,
     },
     txt: {

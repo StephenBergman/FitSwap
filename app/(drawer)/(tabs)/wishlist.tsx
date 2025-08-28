@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import FSButton from '../../../components/buttons/FSButton';
 import { useConfirm } from '../../../components/confirm/confirmprovider';
+import { useToast } from '../../../components/toast/ToastProvider';
 import { emit, on } from '../../../lib/eventBus';
 import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
@@ -35,6 +36,7 @@ type WishlistEntry = {
 export default function WishlistScreen() {
   const c = useColors();
   const confirm = useConfirm();
+  const toast = useToast();
   const [rows, setRows] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,29 +99,41 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }, [fetchWishlist]);
 
-  // Debounced bus refetch
+  // Debounced refetch helper (no toast)
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
     refetchTimer.current = setTimeout(() => fetchWishlist(), 200);
   }, [fetchWishlist]);
 
+  // Listen for events:
+  // - wishlist:changed -> refetch + toast
+  // - items:changed    -> quiet refetch (count/availability changes)
   useEffect(() => {
-    const offA = on('wishlist:changed', scheduleRefetch);
-    const offB = on('items:changed', scheduleRefetch);
+    const onWishlistChanged = () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      refetchTimer.current = setTimeout(async () => {
+        await fetchWishlist();
+        toast({ message: 'Wishlist updated' });
+      }, 200);
+    };
+
+    const offWishlist = on('wishlist:changed', onWishlistChanged);
+    const offItems = on('items:changed', scheduleRefetch);
+
     return () => {
-      offA();
-      offB();
+      offWishlist();
+      offItems();
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
     };
-  }, [scheduleRefetch]);
+  }, [fetchWishlist, scheduleRefetch, toast]);
 
   const removeFromWishlist = async (id: string) => {
     try {
       const { error } = await supabase.from('wishlist').delete().eq('id', id);
       if (error) throw error;
       setRows((prev) => prev.filter((r) => r.id !== id));
-      emit('wishlist:changed'); // keep other screens in sync
+      emit('wishlist:changed'); // triggers refetch + toast above
     } catch (e: any) {
       console.error('[Remove wishlist error]', e);
       Alert.alert('Remove failed', e?.message ?? 'Please try again.');
@@ -155,7 +169,7 @@ export default function WishlistScreen() {
           <Image
             source={{ uri: thumb || 'https://via.placeholder.com/300x400.png?text=No+Image' }}
             style={styles.thumb}
-            resizeMode="cover"
+            resizeMode="contain"
             accessibilityLabel={title}
           />
           <View style={styles.info}>

@@ -286,7 +286,7 @@ export default function HomeScreen() {
           <Image
             source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
             style={styles.image}
-            resizeMode="cover"
+            resizeMode="contain"
           />
           <View style={styles.cardContent}>
             <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>

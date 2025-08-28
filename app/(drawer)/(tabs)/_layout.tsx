@@ -11,19 +11,17 @@ export default function TabLayout() {
       screenOptions={({ route }) => ({
         headerShown: false,
 
-        // Tab bar styling
         tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border },
         tabBarActiveTintColor: c.tint,
         tabBarInactiveTintColor: c.muted,
 
-        // Tab icons per route
         tabBarIcon: ({ color, size }) => {
           let icon: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'home') icon = 'home';
-          if (route.name === 'swap') icon = 'repeat';
-          if (route.name === 'settings') icon = 'settings';
-          if (route.name === 'myswaps') icon = 'swap-horizontal';
           if (route.name === 'wishlist') icon = 'heart';
+          if (route.name === 'swap') icon = 'repeat';
+          if (route.name === 'myswaps') icon = 'swap-horizontal';
+          if (route.name === 'profile') icon = 'person-circle'; 
           return <Ionicons name={icon} size={size} color={color} />;
         },
       })}
@@ -32,7 +30,8 @@ export default function TabLayout() {
       <Tabs.Screen name="wishlist" options={{ title: 'Wishlist', tabBarLabel: 'wishlist' }} />
       <Tabs.Screen name="swap" options={{ title: 'Swap', tabBarLabel: 'swap' }} />
       <Tabs.Screen name="myswaps" options={{ title: 'My Swaps', tabBarLabel: 'My Swaps' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarLabel: 'settings' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarLabel: 'profile' }} /> 
+      
     </Tabs>
   );
 }

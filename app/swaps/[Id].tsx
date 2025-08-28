@@ -319,7 +319,7 @@ export default function SwapDetailScreen() {
                     <Image
                       source={{ uri: row.item.image_url }}
                       style={styles.devThumb}
-                      resizeMode="cover"
+                      resizeMode="contain"
                     />
                   )}
                 </TouchableOpacity>
@@ -403,7 +403,7 @@ export default function SwapDetailScreen() {
         <View style={{ marginTop: 16, gap: 10, flexDirection: 'row', flexWrap: 'wrap' }}>
           {isReceiver && (
             <>
-              <FSButton title="Confirm" variant="primary" onPress={acceptSwap} size="sm" />
+              <FSButton title="Confirm" variant="success" onPress={acceptSwap} size="sm" />
               <FSButton title="Deny" variant="danger" onPress={denySwap} size="sm" />
             </>
           )}

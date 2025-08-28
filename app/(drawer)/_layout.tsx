@@ -5,8 +5,9 @@ import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import * as Updates from 'expo-updates';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import NotificationsBell from '../../components/notifications/NotificationsBell';
+import ProfileButton from '../../components/profile/ProfileButton';
 import { useColors } from '../../lib/theme';
 
 function VersionFooter() {
@@ -39,6 +40,24 @@ function CustomDrawerContent(props: any) {
   );
 }
 
+// Small header component: logo + brand text
+function HeaderLogo() {
+  const c = useColors();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Image
+        // path: client/assets/images/FitswapLogo.png
+        source={require('../../assets/images/FitswapLogo.png')}
+        style={{ width: 28, height: 28 }}
+        resizeMode="contain"
+        accessible
+        accessibilityLabel="FitSwap"
+      />
+      <Text style={{ color: c.text, fontWeight: '800', fontSize: 20 }}>FitSwap</Text>
+    </View>
+  );
+}
+
 export default function DrawerLayout() {
   const c = useColors();
   const router = useRouter();
@@ -48,12 +67,14 @@ export default function DrawerLayout() {
       screenOptions={{
         drawerType: 'front',
         headerShown: true,
+
+        headerTitle: () => <HeaderLogo />, // custom title for all drawer screens
         headerTitleAlign: 'left',
 
         // Theme-aware header
         headerStyle: { backgroundColor: c.card },
         headerTitleStyle: { color: c.text },
-        headerTintColor: c.text, // hamburger/back chevrons
+        headerTintColor: c.text,
 
         // Theme-aware drawer colors
         drawerStyle: { backgroundColor: c.bg },
@@ -61,15 +82,20 @@ export default function DrawerLayout() {
         drawerInactiveTintColor: c.muted,
         drawerActiveBackgroundColor: c.card,
 
-        // Bell on the top-right
-        headerRight: () => <NotificationsBell />,
+        // Bell + profile avatar on the top-right
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <NotificationsBell />
+            <ProfileButton />
+          </View>
+        ),
       }}
       drawerContent={(p) => <CustomDrawerContent {...p} />}
     >
-      {/* Ensure selecting "Home" goes to the /home tab  */}
+      {/* Ensure selecting "Home" goes to the /home tab */}
       <Drawer.Screen
         name="(tabs)"
-        options={{ title: 'Home' }}
+        options={{ title: 'Home' }} // title is used for the drawer item label only
         listeners={({ navigation }) => ({
           drawerItemPress: (e) => {
             e.preventDefault();
@@ -79,7 +105,6 @@ export default function DrawerLayout() {
         })}
       />
 
-      {/* Listed items; default drawer routing works, but we also close the drawer explicitly */}
       <Drawer.Screen
         name="myitems"
         options={{ title: 'My Listed Items' }}
@@ -87,6 +112,18 @@ export default function DrawerLayout() {
           drawerItemPress: (e) => {
             e.preventDefault();
             router.navigate('/myitems');
+            navigation.closeDrawer();
+          },
+        })}
+      />
+
+      <Drawer.Screen
+        name="settings"
+        options={{ title: 'Settings' }}
+        listeners={({ navigation }) => ({
+          drawerItemPress: (e) => {
+            e.preventDefault();
+            router.navigate('/settings');
             navigation.closeDrawer();
           },
         })}

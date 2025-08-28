@@ -48,7 +48,7 @@ export function useTheme() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Colors 
+/* Colors (drop-in palette)
    Inspired by https://www.realtimecolors.com/?colors=e5ddee-0f0b15-bdaad4-663451-ac5b71
    Goals:
    - High contrast text on bg in both modes

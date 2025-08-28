@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, Image, StyleSheet, Switch, Text, View } from 'react-native';
 import FSButton from '../../../components/buttons/FSButton';
 import { useConfirm } from '../../../components/confirm/confirmprovider';
+import { useToast } from '../../../components/toast/ToastProvider';
 import { on } from '../../../lib/eventBus';
 import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
@@ -65,6 +66,7 @@ const pillStyles = StyleSheet.create({
 export default function MySwapsScreen() {
   const c = useColors();
   const confirmDlg = useConfirm();
+  const toast = useToast(); 
   const [includeSelf, setIncludeSelf] = useState<boolean>(__DEV__);
   const [swaps, setSwaps] = useState<VUserSwap[]>([]);
   const [tab, setTab] = useState<'sent' | 'received'>('received');
@@ -242,11 +244,12 @@ export default function MySwapsScreen() {
         .select('id')
         .single();
       if (error || !data) throw error ?? new Error('No update returned');
+      toast({ message: 'Swap accepted' }); // <-- toast on success
     } catch (e: any) {
       patchLocal(row.id, 'pending');
       Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
     }
-  }, [confirmDlg, patchLocal, userId]);
+  }, [confirmDlg, patchLocal, userId, toast]); 
 
   const denySwap = useCallback(async (row: VUserSwap) => {
     if (!userId) return;
@@ -269,11 +272,12 @@ export default function MySwapsScreen() {
         .select('id')
         .single();
       if (error || !data) throw error ?? new Error('No update returned');
+      toast({ message: 'Swap denied' }); // <-- toast on success
     } catch (e: any) {
       patchLocal(row.id, 'pending');
       Alert.alert('Deny failed', e?.message ?? 'Please try again.');
     }
-  }, [confirmDlg, patchLocal, userId]);
+  }, [confirmDlg, patchLocal, userId, toast]); 
 
   const cancelSwap = useCallback(async (row: VUserSwap) => {
     if (!userId) return;
@@ -318,7 +322,7 @@ export default function MySwapsScreen() {
           <Image
             source={{ uri: thumb || 'https://via.placeholder.com/300x400.png?text=No+Image' }}
             style={[styles.thumb, { backgroundColor: c.card }]}
-            resizeMode="cover"
+            resizeMode="contain"
           />
           <View style={styles.info}>
             <Text style={[styles.title, { color: c.text }]}>Swap Request</Text>
@@ -350,7 +354,8 @@ export default function MySwapsScreen() {
 
               {pending && isReceiver && (
                 <>
-                  <FSButton title="Confirm" variant="primary" size="sm" block={false} onPress={() => confirmSwap(item)} />
+                  <FSButton title="Confirm" variant="success" size="sm" block={false} onPress={() => confirmSwap(item)}/>
+    
                   <FSButton title="Deny" variant="danger" size="sm" block={false} onPress={() => denySwap(item)} />
                 </>
               )}

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import AddToWishlistButton from '../../components/wishlist/AddToWishlistButton';
+import { pageContent, WEB_NARROW } from '../../lib/layout';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
@@ -24,7 +25,7 @@ type Item = {
 };
 
 export default function ProductDetailsScreen() {
-  const { ProductId } = useLocalSearchParams<{ ProductId?: string }>();
+  const { ProductId } = useLocalSearchParams<{ ProductId?: string; from?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
   const c = useColors();
@@ -44,22 +45,28 @@ export default function ProductDetailsScreen() {
         .from('items')
         .select('*')
         .eq('id', ProductId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching item:', error.message);
-        Alert.alert('Error', error.message);
+      if (error) throw error;
+      if (!data) {
+        Alert.alert('Not found', 'This item is no longer available.');
+        router.back();
         return;
       }
 
       setItem(data as Item);
-      navigation.setOptions({ title: data.title });
+      // set a nice header title for this screen
+      // (overrides the default "Item" from the root stack)
+      navigation.setOptions?.({ title: data.title || 'Item' });
+    } catch (e: any) {
+      console.error('Error fetching item:', e?.message ?? e);
+      Alert.alert('Error', e?.message ?? 'Failed to load item.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSwapNow = () => {
+  const handleRequestSwap = () => {
     if (!item) return;
     router.push({ pathname: '/offer/offerscreen', params: { id: item.id } });
   };
@@ -75,18 +82,15 @@ export default function ProductDetailsScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={{ padding: 16 }}
+      contentContainerStyle={[pageContent(WEB_NARROW), { padding: 16 }]}
     >
       <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
         <View style={[styles.imageWrap, { backgroundColor: c.card }]}>
           <Image
-            source={{
-              uri:
-                item.image_url ||
-                'https://via.placeholder.com/600x800.png?text=No+Image',
-            }}
+            source={{ uri: item.image_url || 'https://via.placeholder.com/600x800.png?text=No+Image' }}
             style={styles.image}
             resizeMode="contain"
+            accessibilityLabel={item.title}
           />
         </View>
 
@@ -102,20 +106,11 @@ export default function ProductDetailsScreen() {
         </Text>
 
         <View style={styles.actions}>
-          {/* Primary action */}
-          <View style={{ width: '100%' }}>
-            <Text
-              onPress={handleSwapNow}
-              style={[styles.primaryBtn, { backgroundColor: c.tint }]}
-            >
-              Request a swap
-            </Text>
-          </View>
+          <Text onPress={handleRequestSwap} style={[styles.primaryBtn, { backgroundColor: c.tint }]}>
+            Request a swap
+          </Text>
 
-          {/* Secondary action */}
-          <View style={{ width: '100%' }}>
-            <AddToWishlistButton itemId={item.id} />
-          </View>
+          <AddToWishlistButton itemId={item.id} />
         </View>
       </View>
     </ScrollView>
@@ -142,7 +137,7 @@ const styles = StyleSheet.create({
 
   image: {
     width: '100%',
-    aspectRatio: 3 / 4, 
+    aspectRatio: 3 / 4,
   },
 
   title: {

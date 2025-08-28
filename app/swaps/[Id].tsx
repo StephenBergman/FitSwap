@@ -1,6 +1,7 @@
 // app/swaps/[Id].tsx
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,9 +14,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import FSButton from '../../components/buttons/FSButton';
 import { useConfirm } from '../../components/confirm/confirmprovider';
+import { emit, on } from '../../lib/eventBus';
+import { pageContent, WEB_NARROW } from '../../lib/layout';
 import { supabase } from '../../lib/supabase';
-import { useColors } from '../../lib/theme';
+import { useColors, useTheme } from '../../lib/theme';
 
 type ItemLite = {
   id: string;
@@ -41,7 +45,8 @@ export default function SwapDetailScreen() {
   const { Id } = useLocalSearchParams<{ Id?: string }>();
   const router = useRouter();
   const c = useColors();
-  const confirmDlg = useConfirm(); // ← NEW
+  const { resolvedScheme } = useTheme();
+  const confirmDlg = useConfirm();
 
   const [swap, setSwap] = useState<SwapRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,28 +104,28 @@ export default function SwapDetailScreen() {
     setRefreshing(false);
   }, [fetchSwap]);
 
-  // Realtime: keep this swap row updated
-  // Realtime: keep this swap row updated
-useEffect(() => {
-  if (!swap?.id) return;
+  // Realtime via central provider -> event bus (debounced)
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => fetchSwap(), 200);
+  }, [fetchSwap]);
 
-  const channel = supabase
-    .channel('rt-swap-detail')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'swaps', filter: `id=eq.${swap.id}` },
-      (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setSwap((s) => (s ? { ...s, ...(payload.new as any) } : s));
-        }
-      }
-    )
-    .subscribe(); 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [swap?.id]);
+  useEffect(() => {
+    const off = on('swaps:changed', scheduleRefetch);
+    return () => {
+      off();
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    };
+  }, [scheduleRefetch]);
 
+  // Also refresh when navigating back to this screen
+  useFocusEffect(
+    useCallback(() => {
+      fetchSwap();
+      return () => {};
+    }, [fetchSwap])
+  );
 
   // DEV helper when no Id
   const devLoadRecent = useCallback(async () => {
@@ -161,54 +166,46 @@ useEffect(() => {
   const pending    = swap?.status === 'pending';
 
   const acceptSwap = async () => {
-  if (!swap || !me) return;
+    if (!swap || !me) return;
 
-  const ok = await confirmDlg({
-    title: 'Confirm trade?',
-    message: swap.item?.title ?? 'This will accept the trade.',
-    confirmText: 'Confirm',
-    cancelText: 'Back',
-  });
-  if (!ok) return;
+    const ok = await confirmDlg({
+      title: 'Confirm trade?',
+      message: swap.item?.title ?? 'This will accept the trade.',
+      confirmText: 'Confirm',
+      cancelText: 'Back',
+    });
+    if (!ok) return;
 
-  // keep previous for rollback
-  const prevStatus = swap.status;
-  // optimistic UI
-  setSwap(s => (s ? { ...s, status: 'accepted' } : s));
+    const prevStatus = swap.status;
+    setSwap(s => (s ? { ...s, status: 'accepted' } : s)); // optimistic
 
-  try {
-    const { data, error } = await supabase
-      .from('swaps')
-      .update({ status: 'accepted' })
-      .eq('id', swap.id)
-      .eq('receiver_id', me)
-      .eq('status', 'pending')          // atomic guard
-      .select('id, status')
-      .maybeSingle();                    // 0 rows => null data (not a thrown error)
+    try {
+      const { data, error } = await supabase
+        .from('swaps')
+        .update({ status: 'accepted' })
+        .eq('id', swap.id)
+        .eq('receiver_id', me)
+        .eq('status', 'pending')
+        .select('id, status')
+        .maybeSingle();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    if (!data) {
-      // No matching row -> someone resolved it already (canceled/declined/accepted)
-      await fetchSwap(); // get the latest server state
-      Alert.alert(
-        'Trade already resolved',
-        'Looks like the other user canceled this trade'
-      );
+      if (!data) {
+        await fetchSwap();
+        Alert.alert('Trade already resolved', 'Looks like the other user canceled or changed this trade.');
+        router.replace('/myswaps');
+        return;
+      }
+
+      emit('swaps:changed');
       router.replace('/myswaps');
-      return;
+    } catch (e: any) {
+      setSwap(s => (s ? { ...s, status: prevStatus } : s));
+      Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
+      await fetchSwap();
     }
-
-    // success
-    router.replace('/myswaps');
-  } catch (e: any) {
-    // rollback and surface error
-    setSwap(s => (s ? { ...s, status: prevStatus } : s));
-    Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
-    await fetchSwap(); // refresh to stay in sync
-  }
-};
-
+  };
 
   const denySwap = async () => {
     if (!swap || !me) return;
@@ -221,7 +218,8 @@ useEffect(() => {
     });
     if (!ok) return;
 
-    setSwap((s) => (s ? { ...s, status: 'declined' } : s));
+    const prevStatus = swap.status;
+    setSwap(s => (s ? { ...s, status: 'declined' } : s));
     try {
       const { error, data } = await supabase
         .from('swaps')
@@ -233,9 +231,10 @@ useEffect(() => {
         .single();
 
       if (error || !data) throw error ?? new Error('No update returned');
+      emit('swaps:changed');
       router.replace('/myswaps');
     } catch (e: any) {
-      setSwap((s) => (s ? { ...s, status: 'pending' } : s));
+      setSwap(s => (s ? { ...s, status: prevStatus } : s));
       Alert.alert('Deny failed', e?.message ?? 'Please try again.');
     }
   };
@@ -251,7 +250,8 @@ useEffect(() => {
     });
     if (!ok) return;
 
-    setSwap((s) => (s ? { ...s, status: 'canceled' } : s));
+    const prevStatus = swap.status;
+    setSwap(s => (s ? { ...s, status: 'canceled' } : s));
     try {
       const { error, data } = await supabase
         .from('swaps')
@@ -263,8 +263,10 @@ useEffect(() => {
         .single();
 
       if (error || !data) throw error ?? new Error('No update returned');
+      emit('swaps:changed');
+      router.replace('/myswaps');
     } catch (e: any) {
-      setSwap((s) => (s ? { ...s, status: 'pending' } : s));
+      setSwap(s => (s ? { ...s, status: prevStatus } : s));
       Alert.alert('Cancel failed', e?.message ?? 'Please try again.');
     }
   };
@@ -336,19 +338,39 @@ useEffect(() => {
     );
   }
 
+  // status pill colors
+  const statusBg =
+    swap.status === 'accepted'
+      ? (resolvedScheme === 'dark' ? 'rgba(34,197,94,0.22)' : 'rgba(34,197,94,0.14)')
+      : swap.status === 'declined' || swap.status === 'canceled'
+      ? (resolvedScheme === 'dark' ? 'rgba(239,68,68,0.22)' : 'rgba(239,68,68,0.14)')
+      : (resolvedScheme === 'dark' ? 'rgba(245,158,11,0.22)' : 'rgba(245,158,11,0.12)');
+
+  const statusFg =
+    swap.status === 'accepted' ? c.success :
+    swap.status === 'declined' || swap.status === 'canceled' ? c.danger :
+    c.warning;
+
   const req = swap.item;
   const off = swap.offered_item;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={styles.scrollPad}
+      contentContainerStyle={[pageContent(WEB_NARROW), { padding: 16 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Text style={[styles.title, { color: c.text }]}>Swap Request</Text>
-      <Text style={{ color: c.muted, marginBottom: 6 }}>
-        Status: <Text style={{ color: c.text }}>{swap.status}</Text>
-      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ color: c.muted }}>Status</Text>
+        <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: statusBg }}>
+          <Text style={{ color: statusFg, fontWeight: '700', textTransform: 'capitalize' }}>
+            {swap.status}
+          </Text>
+        </View>
+      </View>
+
       {!!swap.message && (
         <Text style={{ color: c.text, marginBottom: 16 }}>Message: {swap.message}</Text>
       )}
@@ -378,32 +400,16 @@ useEffect(() => {
 
       {/* Actions */}
       {pending && (
-        <View style={{ marginTop: 16, gap: 10 }}>
-          {isReceiver ? (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                onPress={acceptSwap}
-                style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, backgroundColor: c.tint }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={denySwap}
-                style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: '#FF3B30' }}
-              >
-                <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Deny</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {isSender ? (
-            <TouchableOpacity
-              onPress={cancelSwap}
-              style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: '#FF3B30', alignSelf: 'flex-start' }}
-            >
-              <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Cancel</Text>
-            </TouchableOpacity>
-          ) : null}
+        <View style={{ marginTop: 16, gap: 10, flexDirection: 'row', flexWrap: 'wrap' }}>
+          {isReceiver && (
+            <>
+              <FSButton title="Confirm" variant="primary" onPress={acceptSwap} size="sm" />
+              <FSButton title="Deny" variant="danger" onPress={denySwap} size="sm" />
+            </>
+          )}
+          {isSender && (
+            <FSButton title="Cancel" variant="danger" onPress={cancelSwap} size="sm" />
+          )}
         </View>
       )}
     </ScrollView>
@@ -415,8 +421,6 @@ const IMG_H = 180;
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollPad: { padding: 16 },
-
   title: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
   section: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8 },
 

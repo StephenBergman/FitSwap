@@ -2,14 +2,16 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import FSButton from '../../../components/buttons/FSButton';
 import DevPanel from '../../../components/dev/devpanel';
-import { registerDeviceTokenIfAllowed, setPushPref } from '../../../lib/notifications';
+import { pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
+import { registerDeviceTokenIfAllowed, setPushPref } from '../../../lib/notifications/push';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { radius, spacing, type as tt, useColors, useTheme } from '../../../lib/theme';
 
 export default function SettingsScreen() {
-  const { scheme, resolvedScheme, setScheme } = useTheme();
-  const isDark = resolvedScheme === 'dark';
+  const { scheme, setScheme } = useTheme();
+  const c = useColors();
   const router = useRouter();
 
   const [pushEnabled, setPushEnabled] = useState<boolean>(false);
@@ -67,80 +69,125 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, isDark && styles.dark]}>
-      <Text style={[styles.heading, isDark && styles.darkText]}>Settings</Text>
+    <View style={[styles.outer, { backgroundColor: c.bg }]}>
+      {/* Max-width wrapper to center content on web */}
+      <View style={pageWrap(WEB_MAX_WIDTH)}>
+        <View style={[styles.container]}>
+          <Text style={[styles.heading, { color: c.text }]}>Settings</Text>
 
-      {/* Theme mode quick-select */}
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.pill} onPress={() => setScheme('system')}>
-          <Text style={styles.pillText}>Use System {scheme === 'system' ? '✓' : ''}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.pill} onPress={() => setScheme('light')}>
-          <Text style={styles.pillText}>Light {scheme === 'light' ? '✓' : ''}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.pill} onPress={() => setScheme('dark')}>
-          <Text style={styles.pillText}>Dark {scheme === 'dark' ? '✓' : ''}</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Theme mode quick-select */}
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={[
+                styles.pill,
+                { backgroundColor: scheme === 'system' ? c.tint : c.card, borderColor: c.border },
+              ]}
+              onPress={() => setScheme('system')}
+            >
+              <Text style={[styles.pillText, { color: scheme === 'system' ? '#fff' : c.text }]}>
+                Use System {scheme === 'system' ? '✓' : ''}
+              </Text>
+            </TouchableOpacity>
 
-      {/* Notifications section */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, isDark && styles.darkText]}>Notifications</Text>
+            <TouchableOpacity
+              style={[
+                styles.pill,
+                { backgroundColor: scheme === 'light' ? c.tint : c.card, borderColor: c.border },
+              ]}
+              onPress={() => setScheme('light')}
+            >
+              <Text style={[styles.pillText, { color: scheme === 'light' ? '#fff' : c.text }]}>
+                Light {scheme === 'light' ? '✓' : ''}
+              </Text>
+            </TouchableOpacity>
 
-        <View style={styles.rowBetween}>
-          <Text style={[styles.label, isDark && styles.darkText]}>Push notifications</Text>
-          <Switch
-            value={pushEnabled}
-            disabled={loadingPush}
-            onValueChange={handleTogglePush}
+            <TouchableOpacity
+              style={[
+                styles.pill,
+                { backgroundColor: scheme === 'dark' ? c.tint : c.card, borderColor: c.border },
+              ]}
+              onPress={() => setScheme('dark')}
+            >
+              <Text style={[styles.pillText, { color: scheme === 'dark' ? '#fff' : c.text }]}>
+                Dark {scheme === 'dark' ? '✓' : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Notifications section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: c.text }]}>Notifications</Text>
+
+            <View style={[styles.rowBetween, { borderColor: c.border }]}>
+              <Text style={[styles.label, { color: c.text }]}>Push notifications</Text>
+              <Switch value={pushEnabled} disabled={loadingPush} onValueChange={handleTogglePush} />
+            </View>
+
+            <Text style={[styles.hint, { color: c.muted }]}>
+              Receive alerts for trade offers and status updates. You can also review past alerts from
+              the bell icon in the top bar.
+            </Text>
+          </View>
+
+          {/* Account actions */}
+          <FSButton
+            title="Change Password"
+            variant="secondary"
+            onPress={() => Alert.alert('Not implemented', 'Password change flow coming soon.')}
+            style={{ marginBottom: spacing.md }}
           />
+
+          <FSButton
+            title="Log Out"
+            variant="danger"
+            onPress={handleLogout}
+            style={{ marginBottom: spacing.lg }}
+          />
+
+          <DevPanel style={{ marginBottom: spacing.md }} />
         </View>
-        <Text style={[styles.hint, isDark && styles.hintDark]}>
-          Receive alerts for trade offers and status updates. You can also review past alerts from the bell icon in the top bar.
-        </Text>
       </View>
-
-      <TouchableOpacity style={styles.grayButton}>
-        <Text style={styles.grayText}>Change Password</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.redButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Log Out</Text>
-      </TouchableOpacity>
-
-      <DevPanel style={{ marginBottom: 12 }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, flex: 1, backgroundColor: '#fff' },
-  dark: { backgroundColor: '#1c1c1e' },
+  outer: { flex: 1 },
+  container: { padding: spacing.lg },
+  heading: {
+    fontSize: tt.title.size,
+    lineHeight: tt.title.lineHeight,
+    fontWeight: tt.title.weight,
+    marginBottom: spacing.lg,
+  },
 
-  heading: { fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
-  darkText: { color: '#fff' },
+  label: { fontSize: tt.body.size },
 
-  label: { fontSize: 16 },
-
-  row: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 20 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth, // subtle divider under the row
+  },
 
   pill: {
-    backgroundColor: '#eee',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    marginRight: 8,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
   },
-  pillText: { color: '#333', fontWeight: '600' },
+  pillText: { fontWeight: '600' },
 
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  hint: { fontSize: 12, color: '#555', marginTop: 4 },
-  hintDark: { color: '#aaa' },
-
-  grayButton: { backgroundColor: '#eee', padding: 14, borderRadius: 6, marginBottom: 20 },
-  grayText: { textAlign: 'center', color: '#333' },
-  redButton: { backgroundColor: '#FF3B30', padding: 14, borderRadius: 6 },
-  logoutText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
+  section: { marginBottom: spacing.lg },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.sm },
+  hint: { fontSize: 12, marginTop: spacing.xs },
 });

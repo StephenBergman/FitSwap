@@ -1,4 +1,4 @@
-// app/(tabs)/swap.tsx
+ // app/(tabs)/swap.tsx
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { pageWrap, WEB_NARROW } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
 import { useColors } from '../../../lib/theme';
 
@@ -55,16 +56,16 @@ export default function SwapScreen() {
     }
   };
 
-const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
-  if (Platform.OS === 'web') {
-    // web Blob is fine
-    return await (await fetch(uri)).blob();
-  }
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  return b64ToUint8(base64); // <- no fetch('data:…') on native
-};
+  const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
+    if (Platform.OS === 'web') {
+      // web Blob is fine
+      return await (await fetch(uri)).blob();
+    }
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return b64ToUint8(base64); 
+  };
 
   const uploadAndSubmit = async () => {
     if (!imageUri || !title || !description || !tradeFor) {
@@ -112,7 +113,7 @@ const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
       setDescription('');
       setTradeFor('');
       setImageUri(null);
-      router.replace('/(tabs)/home');
+      router.replace('/(drawer)/(tabs)/home');
     } catch (err: any) {
       console.error('[UPLOAD ERROR]', err);
       Alert.alert('Error', err.message || 'Something went wrong.');
@@ -122,81 +123,73 @@ const toBytes = async (uri: string): Promise<Uint8Array | Blob> => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
-      <TouchableOpacity
-        style={[styles.imagePicker, { backgroundColor: c.card, borderColor: c.border }]}
-        onPress={pickImage}
-        disabled={loading}
-        activeOpacity={0.8}
-      >
-        {imageUri ? (
-  <Image
-    source={{ uri: imageUri }}
-    style={styles.imagePreview}
-    resizeMode="contain"   // 
-  />
-) : (
-  <Text style={[styles.imagePlaceholder, { color: c.muted }]}>
-    Tap to choose an image
-  </Text>
-)}
-      </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <View style={[pageWrap(WEB_NARROW), styles.container]}>
+        <TouchableOpacity
+          style={[styles.imagePicker, { backgroundColor: c.card, borderColor: c.border }]}
+          onPress={pickImage}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="contain" />
+          ) : (
+            <Text style={[styles.imagePlaceholder, { color: c.muted }]}>
+              Tap to choose an image
+            </Text>
+          )}
+        </TouchableOpacity>
 
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: c.card, borderColor: c.border, color: c.text },
-        ]}
-        placeholder="Title"
-        placeholderTextColor={c.muted}
-        value={title}
-        onChangeText={setTitle}
-        editable={!loading}
-      />
+        <TextInput
+          style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
+          placeholder="Title"
+          placeholderTextColor={c.muted}
+          value={title}
+          onChangeText={setTitle}
+          editable={!loading}
+        />
 
-      <TextInput
-        style={[
-          styles.input,
-          styles.textarea,
-          { backgroundColor: c.card, borderColor: c.border, color: c.text },
-        ]}
-        placeholder="Description"
-        placeholderTextColor={c.muted}
-        multiline
-        value={description}
-        onChangeText={setDescription}
-        editable={!loading}
-      />
+        <TextInput
+          style={[
+            styles.input,
+            styles.textarea,
+            { backgroundColor: c.card, borderColor: c.border, color: c.text },
+          ]}
+          placeholder="Description"
+          placeholderTextColor={c.muted}
+          multiline
+          value={description}
+          onChangeText={setDescription}
+          editable={!loading}
+        />
 
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: c.card, borderColor: c.border, color: c.text },
-        ]}
-        placeholder="Looking to trade for..."
-        placeholderTextColor={c.muted}
-        value={tradeFor}
-        onChangeText={setTradeFor}
-        editable={!loading}
-      />
+        <TextInput
+          style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
+          placeholder="Looking to trade for..."
+          placeholderTextColor={c.muted}
+          value={tradeFor}
+          onChangeText={setTradeFor}
+          editable={!loading}
+        />
 
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: c.tint, opacity: loading ? 0.7 : 1 }]}
-        onPress={uploadAndSubmit}
-        disabled={loading}
-        activeOpacity={0.9}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? 'Uploading…' : 'List Item'}
-        </Text>
-        {loading && <ActivityIndicator style={{ marginLeft: 10 }} />}
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: c.tint, opacity: loading ? 0.7 : 1 }]}
+          onPress={uploadAndSubmit}
+          disabled={loading}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.buttonText}>{loading ? 'Uploading…' : 'List Item'}</Text>
+          {loading && <ActivityIndicator style={{ marginLeft: 10 }} />}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, flex: 1 },
+  // no horizontal padding here; pageWrap already does that on web.
+  container: { paddingVertical: 20, flex: 1 },
+
   imagePicker: {
     height: 220,
     borderWidth: 1,
@@ -208,6 +201,7 @@ const styles = StyleSheet.create({
   },
   imagePreview: { width: '100%', height: '100%' },
   imagePlaceholder: { fontSize: 14 },
+
   input: {
     borderWidth: 1,
     marginBottom: 14,
@@ -216,6 +210,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   textarea: { minHeight: 90, textAlignVertical: 'top' },
+
   button: {
     borderRadius: 8,
     padding: 14,
@@ -224,11 +219,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-previewBox: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  previewBox: { 
+    width: '100%', 
+    height: '100%', 
+    justifyContent: 'center', 
+    alignItems: 'center' },
+
+  buttonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '600' },
 });

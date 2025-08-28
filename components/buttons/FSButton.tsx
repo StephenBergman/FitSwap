@@ -6,7 +6,7 @@ import { useColors } from '../../lib/theme';
 type Props = {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' 
   style?: ViewStyle;
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg'; 

@@ -12,15 +12,18 @@ import {
 } from 'react-native';
 import FSButton from '../../components/buttons/FSButton';
 import FSInput from '../../components/buttons/FSInput';
+import { pageContent, pageWrap, WEB_NARROW } from '../../lib/layout';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const c = useColors();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const styles = useMemo(() => makeStyles(c), [c]);
 
@@ -29,24 +32,33 @@ export default function RegisterScreen() {
       Alert.alert('Error', 'Email and password are required');
       return;
     }
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      Alert.alert('Registration Failed', error.message);
-    } else {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        Alert.alert('Registration Failed', error.message);
+        return;
+      }
       Alert.alert('Success', 'Check your email to confirm your account.');
       router.replace('/auth/login');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: c.bg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.container}>
-          <Text style={styles.title}>Create an Account</Text>
+      <ScrollView
+        contentContainerStyle={[pageContent(WEB_NARROW), styles.scroll]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Centered, constrained panel on web; normal padded screen on native */}
+        <View style={[pageWrap(WEB_NARROW), styles.panel, { backgroundColor: c.card, borderColor: c.border }]}>
+          <Text style={[styles.title, { color: c.text }]}>Create an Account</Text>
 
           <FSInput
             placeholder="Email"
@@ -85,11 +97,11 @@ export default function RegisterScreen() {
             }
           />
 
-          <FSButton title="Register" onPress={handleRegister} />
+          <FSButton title={loading ? 'Creating…' : 'Register'} onPress={handleRegister} disabled={loading} />
 
           <Text
             onPress={() => router.replace('/auth/login')}
-            style={styles.link}
+            style={[styles.link, { color: c.accent ?? c.tint }]}
           >
             Already have an account? Log in
           </Text>
@@ -101,21 +113,35 @@ export default function RegisterScreen() {
 
 const makeStyles = (c: ReturnType<typeof useColors>) =>
   StyleSheet.create({
-    scroll: { flexGrow: 1 },
-    container: {
-      flex: 1,
-      backgroundColor: c.bg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 28,
-      paddingBottom: 24,
+    scroll: {
+      flexGrow: 1,
+      justifyContent: 'center', // vertical centering when content is short
+      paddingVertical: 24,
+    },
+    // Card-like surface that looks good on web and native
+    panel: {
+      width: '100%',
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 20,
+      // soft shadow on iOS / elevation on Android
+      shadowColor: c.overlay ?? '#000',
+      shadowOpacity: Platform.OS === 'ios' ? 0.08 : 0,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      ...(Platform.OS === 'android' ? { elevation: 2 } : null),
     },
     title: {
       fontSize: 28,
-      marginBottom: 28,
+      marginBottom: 24,
       fontWeight: '700',
-      color: c.text,
       letterSpacing: 0.2,
+      textAlign: 'center',
     },
-    link: { marginTop: 18, color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
+    link: {
+      marginTop: 16,
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });

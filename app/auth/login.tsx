@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import FSButton from '../../components/buttons/FSButton';
 import FSInput from '../../components/buttons/FSInput';
+import { pageContent, pageWrap, WEB_NARROW } from '../../lib/layout';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
@@ -36,13 +37,21 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: c.bg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.container}>
-          <Text style={styles.title}>Log in to FitSwap</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scroll,
+          pageContent(WEB_NARROW, true), // center + gutters on web
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Centered card (web gets max width, native just gets padding) */}
+        <View style={[pageWrap(WEB_NARROW, true), styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+          <Text style={[styles.title, { color: c.text }]}>Log in to FitSwap</Text>
 
           <FSInput
             placeholder="Email"
@@ -84,10 +93,7 @@ export default function LoginScreen() {
 
           <FSButton title="Log In" onPress={handleLogin} />
 
-          <Text
-            onPress={() => router.push('/auth/register')}
-            style={styles.link}
-          >
+          <Text onPress={() => router.push('/auth/register')} style={[styles.link, { color: c.accent ?? c.tint }]}>
             Don’t have an account? Register
           </Text>
         </View>
@@ -98,21 +104,33 @@ export default function LoginScreen() {
 
 const makeStyles = (c: ReturnType<typeof useColors>) =>
   StyleSheet.create({
-    scroll: { flexGrow: 1 },
-    container: {
-      flex: 1,
-      backgroundColor: c.bg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 28,
-      paddingBottom: 24,
+    // Vertical centering for tall screens; still scrolls on small ones
+    scroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 32 },
+    // Card wrapper matches app theme and keeps form at a comfortable reading width
+    card: {
+      width: '100%',
+      borderWidth: 1,
+      borderRadius: 14,
+      padding: 20,
+      gap: 14,
+      // light shadow on native; browser handles nicely with border only
+      shadowColor: '#000',
+      shadowOpacity: 0.06,
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 6,
+      elevation: 2,
     },
     title: {
       fontSize: 28,
-      marginBottom: 28,
-      fontWeight: '700',
-      color: c.text,
+      marginBottom: 8,
+      fontWeight: '800',
       letterSpacing: 0.2,
+      textAlign: 'center',
     },
-    link: { marginTop: 18, color: c.accent ?? c.tint, fontSize: 16, fontWeight: '600' },
+    link: {
+      marginTop: 8,
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });

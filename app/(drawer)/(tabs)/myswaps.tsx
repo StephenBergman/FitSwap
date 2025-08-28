@@ -1,19 +1,14 @@
 // app/(tabs)/myswaps.tsx
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, FlatList, Image, StyleSheet, Switch, Text, View } from 'react-native';
+import FSButton from '../../../components/buttons/FSButton';
 import { useConfirm } from '../../../components/confirm/confirmprovider';
+import { on } from '../../../lib/eventBus';
+import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
-import { useColors } from '../../../lib/theme';
+import { radius, spacing, type as tt, useColors, useTheme } from '../../../lib/theme';
 
 type VUserSwap = {
   id: string;
@@ -35,7 +30,7 @@ type VUserSwap = {
 
 type JoinedSwap = {
   id: string;
-  item_id: string;
+  item_id: string | null;
   offered_item_id: string | null;
   sender_id: string;
   receiver_id: string;
@@ -46,29 +41,60 @@ type JoinedSwap = {
   requested?: any;
 };
 
+function StatusPill({ status }: { status: VUserSwap['status'] }) {
+  const c = useColors();
+  const { resolvedScheme } = useTheme();
+  const palette = {
+    pending:  { fg: c.warning, bg: resolvedScheme === 'dark' ? 'rgba(245,158,11,0.22)' : 'rgba(245,158,11,0.12)' },
+    accepted: { fg: c.success, bg: resolvedScheme === 'dark' ? 'rgba(34,197,94,0.22)'  : 'rgba(34,197,94,0.14)'  },
+    declined: { fg: c.danger,  bg: resolvedScheme === 'dark' ? 'rgba(239,68,68,0.22)'  : 'rgba(239,68,68,0.14)'  },
+    canceled: { fg: c.muted,   bg: resolvedScheme === 'dark' ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.12)' },
+  } as const;
+  const s = palette[status];
+  return (
+    <View style={[pillStyles.pill, { backgroundColor: s.bg }]}>
+      <Text style={[pillStyles.pillText, { color: s.fg }]}>{status}</Text>
+    </View>
+  );
+}
+const pillStyles = StyleSheet.create({
+  pill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill },
+  pillText: { fontWeight: '700', textTransform: 'capitalize' as const, fontSize: tt.cap.size, lineHeight: tt.cap.lineHeight },
+});
+
 export default function MySwapsScreen() {
   const c = useColors();
-  const confirmDlg = useConfirm(); 
+  const confirmDlg = useConfirm();
   const [includeSelf, setIncludeSelf] = useState<boolean>(__DEV__);
   const [swaps, setSwaps] = useState<VUserSwap[]>([]);
   const [tab, setTab] = useState<'sent' | 'received'>('received');
+
   const [userId, setUserId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false); // ensures we know when auth is resolved
   const router = useRouter();
 
-  // Get current user once
+  // Resolve user 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!mounted) return;
-      setUserId(data.user?.id ?? null);
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (mounted) {
+        setUserId(data.session?.user?.id ?? null);
+        setAuthReady(true);
+      }
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id ?? null);
+      setAuthReady(true);
     });
-    return () => { mounted = false; };
+    return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, []);
 
   // Core fetch 
   const loadSwaps = useCallback(async () => {
-    if (!userId) return;
+    if (!authReady || !userId) { setSwaps([]); return; }
 
+    
     const { data: vRows, error: vErr } = await supabase
       .from('v_user_swaps')
       .select('*')
@@ -80,6 +106,7 @@ export default function MySwapsScreen() {
       return;
     }
 
+    
     const { data: jRows, error: jErr } = await supabase
       .from('swaps')
       .select(`
@@ -96,7 +123,7 @@ export default function MySwapsScreen() {
         const req = Array.isArray(s.requested) ? s.requested[0] : s.requested;
         return {
           id: s.id,
-          item_id: s.item_id,
+          item_id: s.item_id ?? '',
           offered_item_id: s.offered_item_id ?? null,
           sender_id: s.sender_id,
           receiver_id: s.receiver_id,
@@ -106,7 +133,7 @@ export default function MySwapsScreen() {
           offered_id: off?.id ?? null,
           offered_title: off?.title ?? null,
           offered_image_url: off?.image_url ?? null,
-          requested_id: req?.id ?? s.item_id,
+          requested_id: req?.id ?? s.item_id ?? '',
           requested_title: req?.title ?? null,
           requested_image_url: req?.image_url ?? null,
         };
@@ -115,32 +142,26 @@ export default function MySwapsScreen() {
       return;
     }
 
-    const { data: sRows, error: sErr } = await supabase
+    
+    const { data: sRows } = await supabase
       .from('swaps')
       .select('id,item_id,offered_item_id,sender_id,receiver_id,message,status,created_at')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order('created_at', { ascending: false });
 
-    if (sErr || !sRows?.length) {
-      setSwaps([]);
-      return;
-    }
+    if (!sRows?.length) { setSwaps([]); return; }
 
-    const ids = Array.from(
-      new Set(sRows.flatMap(s => [s.offered_item_id, s.item_id]).filter(Boolean) as string[])
-    );
-    const { data: items } = await supabase
-      .from('items')
-      .select('id,title,image_url')
-      .in('id', ids);
-
+    const ids = Array.from(new Set(
+      sRows.flatMap(s => [s.offered_item_id, s.item_id]).filter(Boolean) as string[]
+    ));
+    const { data: items } = await supabase.from('items').select('id,title,image_url').in('id', ids);
     const byId = new Map((items ?? []).map(i => [i.id, i]));
     const formatted: VUserSwap[] = sRows.map(s => {
       const off = s.offered_item_id ? byId.get(s.offered_item_id) : null;
-      const req = byId.get(s.item_id);
+      const req = s.item_id ? byId.get(s.item_id) : null;
       return {
         id: s.id,
-        item_id: s.item_id,
+        item_id: s.item_id ?? '',
         offered_item_id: s.offered_item_id ?? null,
         sender_id: s.sender_id,
         receiver_id: s.receiver_id,
@@ -150,57 +171,38 @@ export default function MySwapsScreen() {
         offered_id: off?.id ?? null,
         offered_title: off?.title ?? null,
         offered_image_url: off?.image_url ?? null,
-        requested_id: req?.id ?? s.item_id,
+        requested_id: req?.id ?? s.item_id ?? '',
         requested_title: req?.title ?? null,
         requested_image_url: req?.image_url ?? null,
       };
     });
-
     setSwaps(formatted);
-  }, [userId]);
+  }, [authReady, userId]);
 
-  // Initial load
-  useEffect(() => {
+  // Initial + user change
+  useEffect(() => { loadSwaps(); }, [loadSwaps]);
+
+  // Refresh when screen regains focus (native)
+  useFocusEffect(useCallback(() => {
     loadSwaps();
-  }, [loadSwaps]);
+    return () => {};
+  }, [loadSwaps]));
 
   // Debounced refetch used by realtime events
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
-    refetchTimer.current = setTimeout(() => {
-      loadSwaps();
-    }, 200);
+    refetchTimer.current = setTimeout(() => { loadSwaps(); }, 200);
   }, [loadSwaps]);
 
-  // Realtime: subscribe to swaps where the user is sender or receiver
+  // reacts to global invalidation fired by the RealtimeProvider.
   useEffect(() => {
-    if (!userId) return;
-
-    const chSent = supabase
-      .channel(`swaps-sent-${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'swaps', filter: `sender_id=eq.${userId}` },
-        scheduleRefetch
-      )
-      .subscribe();
-
-    const chRecv = supabase
-      .channel(`swaps-recv-${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'swaps', filter: `receiver_id=eq.${userId}` },
-        scheduleRefetch
-      )
-      .subscribe();
-
+    const off = on('swaps:changed', scheduleRefetch);
     return () => {
-      supabase.removeChannel(chSent);
-      supabase.removeChannel(chRecv);
+      off();
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
     };
-  }, [userId, scheduleRefetch]);
+  }, [scheduleRefetch]);
 
   // Sent vs Received
   const { sent, received } = useMemo(() => {
@@ -216,13 +218,10 @@ export default function MySwapsScreen() {
 
   const filtered = tab === 'sent' ? sent : received;
 
-  // ----- helpers -----
   const patchLocal = useCallback((id: string, status: VUserSwap['status']) => {
     setSwaps(prev => prev.map(s => (s.id === id ? { ...s, status } : s)));
   }, []);
-  // ---------------------------------------------
 
-  // ----- action handlers (atomic guards) -----
   const confirmSwap = useCallback(async (row: VUserSwap) => {
     if (!userId) return;
     const ok = await confirmDlg({
@@ -302,16 +301,16 @@ export default function MySwapsScreen() {
       Alert.alert('Cancel failed', e?.message ?? 'Please try again.');
     }
   }, [confirmDlg, patchLocal, userId]);
-  // -------------------------------------------
 
   const renderItem = ({ item }: { item: VUserSwap }) => {
     const isSent = item.sender_id === userId;
     const isReceiver = item.receiver_id === userId;
     const pending = item.status === 'pending';
 
-    const thumb = isSent ? item.requested_image_url : item.offered_image_url;
-    const title = isSent ? item.requested_title ?? 'Requested item' : item.offered_title ?? 'Offered item';
-    const label = isSent ? 'Requesting:' : 'They offered:';
+    // For sent: show your offered item. For received: show the item offered to you.
+    const thumb = isSent ? item.offered_image_url : item.requested_image_url;
+    const title = isSent ? (item.offered_title ?? 'Offered item') : (item.requested_title ?? 'Requested item');
+    const label = isSent ? 'You offered:' : 'Offer for:';
 
     return (
       <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -323,39 +322,41 @@ export default function MySwapsScreen() {
           />
           <View style={styles.info}>
             <Text style={[styles.title, { color: c.text }]}>Swap Request</Text>
+
             <Text style={[styles.label, { color: c.muted }]}>{label}</Text>
             <Text style={[styles.value, { color: c.text }]} numberOfLines={1}>{title}</Text>
 
-            <Text style={[styles.label, { color: c.muted }]}>Status:</Text>
-            <Text style={[styles.value, { color: c.text }]}>{item.status}</Text>
+            <View style={{ height: spacing.xs }} />
+
+            <Text style={[styles.label, { color: c.muted }]}>Status</Text>
+            <StatusPill status={item.status} />
 
             {!!item.message && (
               <>
-                <Text style={[styles.label, { color: c.muted }]}>Message:</Text>
+                <View style={{ height: spacing.xs }} />
+                <Text style={[styles.label, { color: c.muted }]}>Message</Text>
                 <Text style={[styles.value, { color: c.text }]} numberOfLines={2}>{item.message}</Text>
               </>
             )}
 
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginTop: 8 }}>
-              <TouchableOpacity onPress={() => router.push(`/swaps/${item.id}`)}>
-                <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
-              </TouchableOpacity>
+            <View style={styles.actionsRow}>
+              <FSButton
+                title="View Details"
+                variant="secondary"
+                size="sm"
+                block={false}
+                onPress={() => router.push(`/swaps/${item.id}`)}
+              />
 
               {pending && isReceiver && (
                 <>
-                  <TouchableOpacity onPress={() => confirmSwap(item)}>
-                    <Text style={{ color: c.tint, fontWeight: '700' }}>Confirm</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => denySwap(item)}>
-                    <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Deny</Text>
-                  </TouchableOpacity>
+                  <FSButton title="Confirm" variant="primary" size="sm" block={false} onPress={() => confirmSwap(item)} />
+                  <FSButton title="Deny" variant="danger" size="sm" block={false} onPress={() => denySwap(item)} />
                 </>
               )}
 
               {pending && !isReceiver && (
-                <TouchableOpacity onPress={() => cancelSwap(item)}>
-                  <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Cancel</Text>
-                </TouchableOpacity>
+                <FSButton title="Cancel" variant="danger" size="sm" block={false} onPress={() => cancelSwap(item)} />
               )}
             </View>
           </View>
@@ -365,86 +366,70 @@ export default function MySwapsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
-      <Text style={[styles.heading, { color: c.text }]}>My Swaps</Text>
+    <View style={[styles.outer, { backgroundColor: c.bg }]}>
+      <View style={pageWrap(WEB_MAX_WIDTH)}>
+        <View style={styles.container}>
+          <Text style={[styles.heading, { color: c.text }]}>My Swaps</Text>
 
-      <View style={styles.selfRow}>
-        <Text style={[styles.selfLabel, { color: c.muted }]}>Include self-swaps</Text>
-        <Switch value={includeSelf} onValueChange={setIncludeSelf} />
-      </View>
+          <View style={styles.selfRow}>
+            <Text style={[styles.selfLabel, { color: c.muted }]}>Include self-swaps</Text>
+            <Switch value={includeSelf} onValueChange={setIncludeSelf} />
+          </View>
 
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          onPress={() => setTab('received')}
-          style={[
-            styles.tabBtn,
-            { borderColor: c.border, backgroundColor: c.card },
-            tab === 'received' && { backgroundColor: c.tint, borderColor: c.tint },
-          ]}
-        >
-          <Text style={[styles.tabText, { color: tab === 'received' ? '#fff' : c.text }]}>
-            Received ({received.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setTab('sent')}
-          style={[
-            styles.tabBtn,
-            { borderColor: c.border, backgroundColor: c.card },
-            tab === 'sent' && { backgroundColor: c.tint, borderColor: c.tint },
-          ]}
-        >
-          <Text style={[styles.tabText, { color: tab === 'sent' ? '#fff' : c.text }]}>
-            Sent ({sent.length})
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.tabs}>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={[styles.tabBtn, { borderColor: c.border, backgroundColor: c.card }, tab === 'received' && { backgroundColor: c.tint, borderColor: c.tint }]}>
+                <Text style={[styles.tabText, { color: tab === 'received' ? '#fff' : c.text }]} onPress={() => setTab('received')}>
+                  Received ({received.length})
+                </Text>
+              </View>
+              <View style={[styles.tabBtn, { borderColor: c.border, backgroundColor: c.card }, tab === 'sent' && { backgroundColor: c.tint, borderColor: c.tint }]}>
+                <Text style={[styles.tabText, { color: tab === 'sent' ? '#fff' : c.text }]} onPress={() => setTab('sent')}>
+                  Sent ({sent.length})
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
       </View>
 
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        ListEmptyComponent={<Text style={{ color: c.muted }}>No swaps yet!</Text>}
+        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        ListEmptyComponent={
+          <Text style={{ color: c.muted, paddingHorizontal: spacing.lg }}>
+            {authReady ? 'No swaps yet!' : 'Loading…'}
+          </Text>
+        }
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[pageContent(WEB_MAX_WIDTH), { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }]}
       />
     </View>
   );
 }
 
 const THUMB_W = 56;
-
 const styles = StyleSheet.create({
-  container: { padding: 20, flex: 1 },
-  heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
+  outer: { flex: 1 },
+  container: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  heading: { fontSize: tt.title.size, lineHeight: tt.title.lineHeight, fontWeight: tt.title.weight, marginBottom: spacing.sm },
 
-  selfRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  selfLabel: { color: '#475569' },
+  selfRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  selfLabel: { fontSize: tt.body.size },
 
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  tabBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  tabText: { fontWeight: '600' },
+  tabs: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
+  tabBtn: { paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1 },
+  tabText: { fontWeight: '700' },
 
-  card: {
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-  },
-  row: { flexDirection: 'row', gap: 12 },
-  thumb: {
-    width: THUMB_W,
-    height: THUMB_W * (4 / 3),
-    borderRadius: 8,
-  },
+  card: { padding: spacing.md, borderWidth: 1, borderRadius: radius.md },
+  row: { flexDirection: 'row', gap: spacing.md },
+  thumb: { width: THUMB_W, height: THUMB_W * (4 / 3), borderRadius: radius.md },
   info: { flex: 1 },
-  title: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 },
-  label: { fontWeight: '600', marginTop: 4 },
-  value: { marginBottom: 2 },
-  link: { marginTop: 2, fontWeight: '500' },
+  title: { fontWeight: '800', marginBottom: spacing.xs, fontSize: 16 },
+  label: { fontWeight: '600', marginTop: spacing.xs, fontSize: tt.cap.size, lineHeight: tt.cap.lineHeight, textTransform: 'uppercase' },
+  value: { marginBottom: 2, fontSize: tt.body.size, lineHeight: tt.body.lineHeight },
+
+  actionsRow: { marginTop: spacing.sm, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
 });

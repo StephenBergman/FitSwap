@@ -1,24 +1,24 @@
 // app/(drawer)/(tabs)/home.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
   Image,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import FSButton from '../../../components/buttons/FSButton';
 import FSInput from '../../../components/buttons/FSInput';
-
 import { emit, on } from '../../../lib/eventBus';
+import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
 import { useColors } from '../../../lib/theme';
 
@@ -50,6 +50,7 @@ function HomeBanner({
             <FSButton title="List an item" variant="secondary" onPress={onListItem} />
           </View>
         </View>
+
         <View style={styles.badgesRow}>
           <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
             <Text style={[styles.badgeText, { color: c.muted }]}>No fees</Text>
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
   const [items, setItems] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [onlyWishlisted, setOnlyWishlisted] = useState(false);
   const [withImagesOnly, setWithImagesOnly] = useState(false);
@@ -162,42 +164,28 @@ export default function HomeScreen() {
     fetchWishlistMap();
   }, [fetchItems, fetchWishlistMap]);
 
-  // Realtime: reflect item delists/updates
-  useEffect(() => {
-    const ch = supabase
-      .channel('rt-home-items')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'items' },
-        (payload) => {
-          const row = payload.new as ItemRow;
-          if (row.archived_at) {
-            setItems((prev) => prev.filter((it) => it.id !== row.id));
-          } else {
-            setItems((prev) => prev.map((it) => (it.id === row.id ? { ...it, ...row } : it)));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'items' },
-        (payload) => {
-          const oldRow = payload.old as { id: string };
-          setItems((prev) => prev.filter((it) => it.id !== oldRow.id));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, []);
+  // Realtime: handled via centralized provider -> event bus
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => fetchItems(), 200);
+  }, [fetchItems]);
 
   // Refetch when other parts of the app signal item changes
   useEffect(() => {
-    const off = on('items:changed', fetchItems);
-    return off;
-  }, [fetchItems]);
+    const off = on('items:changed', scheduleRefetch);
+    return () => {
+      off();
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    };
+  }, [scheduleRefetch]);
+
+  // Pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([fetchItems(), fetchWishlistMap()]);
+    setRefreshing(false);
+  }, [fetchItems, fetchWishlistMap]);
 
   // Responsive columns
   const numColumns = useMemo(() => {
@@ -231,6 +219,7 @@ export default function HomeScreen() {
         const { data, error } = await supabase.rpc('toggle_wishlist', { p_item: itemId });
         if (!error && data !== undefined && data !== null) {
           setWish((m) => ({ ...m, [itemId]: !!data }));
+          emit('wishlist:changed');
           return;
         }
       } catch {
@@ -245,9 +234,11 @@ export default function HomeScreen() {
             .eq('user_id', uid)
             .eq('item_id', itemId);
           if (error) throw error;
+          emit('wishlist:changed');
         } else {
           const { error } = await supabase.from('wishlist').insert({ user_id: uid, item_id: itemId });
           if (error) throw error;
+          emit('wishlist:changed'); 
         }
       } catch (e) {
         console.error('[Wishlist toggle fallback error]', e);
@@ -295,7 +286,7 @@ export default function HomeScreen() {
           <Image
             source={{ uri: item.image_url || 'https://via.placeholder.com/300x300.png?text=No+Image' }}
             style={styles.image}
-            resizeMode="cover" // tighter card; swap to "contain" if you prefer
+            resizeMode="cover"
           />
           <View style={styles.cardContent}>
             <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
@@ -310,95 +301,101 @@ export default function HomeScreen() {
     );
   };
 
-  // ---------- Make the whole screen scroll ----------
+  // ---------- Header (wrapped to center on web) ----------
   const ListHeader = useMemo(
     () => (
-      <View>
-        <HomeBanner onExplore={() => router.push('/home')} onListItem={() => router.push('/swap')} />
+      <>
+        {/* Banner constrained to page max-width on web */}
+        <View style={pageWrap(WEB_MAX_WIDTH)}>
+          <HomeBanner onExplore={() => router.push('/home')} onListItem={() => router.push('/swap')} />
+        </View>
 
-        {/* Search */}
-        <View style={{ paddingHorizontal: 8, marginBottom: 8 }}>
-          <FSInput
-            placeholder="Search items…"
-            value={query}
-            onChangeText={setQuery}
-            returnKeyType="search"
-            endAdornment={
-              !!query ? (
-                <Text
-                  onPress={() => setQuery('')}
-                  style={{ color: c.muted, fontWeight: '600', paddingHorizontal: 8 }}
+        {/* Search + Sort + Filters + Count all centered */}
+        <View style={pageWrap(WEB_MAX_WIDTH)}>
+          {/* Search */}
+          <View style={{ paddingHorizontal: 8, marginBottom: 8 }}>
+            <FSInput
+              placeholder="Search items…"
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+              endAdornment={
+                !!query ? (
+                  <Text
+                    onPress={() => setQuery('')}
+                    style={{ color: c.muted, fontWeight: '600', paddingHorizontal: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                  >
+                    Clear
+                  </Text>
+                ) : null
+              }
+            />
+          </View>
+
+          {/* Sort chips */}
+          <View style={styles.chipsRow}>
+            {(['newest', 'oldest'] as const).map((opt) => {
+              const active = sort === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => setSort(opt)}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: c.card, borderColor: c.border },
+                    active && { backgroundColor: c.tint, borderColor: c.tint },
+                  ]}
                   accessibilityRole="button"
-                  accessibilityLabel="Clear search"
+                  accessibilityState={{ selected: active }}
                 >
-                  Clear
-                </Text>
-              ) : null
-            }
-          />
+                  <Text style={[styles.chipTxt, { color: c.text }, active && styles.chipTxtActive]}>
+                    {opt === 'newest' ? 'Newest' : 'Oldest'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Filters */}
+          <View style={styles.chipsRow}>
+            <TouchableOpacity
+              onPress={() => setOnlyWishlisted((v) => !v)}
+              style={[
+                styles.chip,
+                { backgroundColor: c.card, borderColor: c.border },
+                onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: onlyWishlisted }}
+            >
+              <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>
+                Wishlisted
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setWithImagesOnly((v) => !v)}
+              style={[
+                styles.chip,
+                { backgroundColor: c.card, borderColor: c.border },
+                withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: withImagesOnly }}
+            >
+              <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>
+                With image
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={{ marginLeft: 12, marginBottom: 6, color: c.muted }}>
+            {displayItems.length} result{displayItems.length === 1 ? '' : 's'}
+          </Text>
         </View>
-
-        {/* Sort chips */}
-        <View style={styles.chipsRow}>
-          {(['newest', 'oldest'] as const).map((opt) => {
-            const active = sort === opt;
-            return (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => setSort(opt)}
-                style={[
-                  styles.chip,
-                  { backgroundColor: c.card, borderColor: c.border },
-                  active && { backgroundColor: c.tint, borderColor: c.tint },
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.chipTxt, { color: c.text }, active && styles.chipTxtActive]}>
-                  {opt === 'newest' ? 'Newest' : 'Oldest'}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Filters */}
-        <View style={styles.chipsRow}>
-          <TouchableOpacity
-            onPress={() => setOnlyWishlisted((v) => !v)}
-            style={[
-              styles.chip,
-              { backgroundColor: c.card, borderColor: c.border },
-              onlyWishlisted && { backgroundColor: c.tint, borderColor: c.tint },
-            ]}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: onlyWishlisted }}
-          >
-            <Text style={[styles.chipTxt, { color: c.text }, onlyWishlisted && styles.chipTxtActive]}>
-              Wishlisted
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setWithImagesOnly((v) => !v)}
-            style={[
-              styles.chip,
-              { backgroundColor: c.card, borderColor: c.border },
-              withImagesOnly && { backgroundColor: c.tint, borderColor: c.tint },
-            ]}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: withImagesOnly }}
-          >
-            <Text style={[styles.chipTxt, { color: c.text }, withImagesOnly && styles.chipTxtActive]}>
-              With image
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={{ marginLeft: 12, marginBottom: 6, color: c.muted }}>
-          {displayItems.length} result{displayItems.length === 1 ? '' : 's'}
-        </Text>
-      </View>
+      </>
     ),
     [router, query, c, sort, onlyWishlisted, withImagesOnly, displayItems.length]
   );
@@ -412,12 +409,16 @@ export default function HomeScreen() {
         numColumns={numColumns}
         renderItem={renderItem}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 100 }}
+        // Center the grid on web and add page gutters
+        contentContainerStyle={[pageContent(WEB_MAX_WIDTH), { paddingBottom: 100 }]}
         columnWrapperStyle={numColumns > 1 ? { gap: 6 } : undefined}
         ListEmptyComponent={
           <Text style={[styles.emptyText, { color: c.muted }]}>
             {loading ? 'Loading…' : 'No items found.'}
           </Text>
+        }
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.text} />
         }
         showsVerticalScrollIndicator={false}
       />
@@ -507,8 +508,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderWidth: 1, // color set at render-time
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 1 },

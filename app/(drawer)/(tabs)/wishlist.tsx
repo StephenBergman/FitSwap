@@ -1,6 +1,6 @@
 // app/(tabs)/wishlist.tsx
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,11 +9,12 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import FSButton from '../../../components/buttons/FSButton';
 import { useConfirm } from '../../../components/confirm/confirmprovider';
 import { emit, on } from '../../../lib/eventBus';
+import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
 import { useColors } from '../../../lib/theme';
 
@@ -28,7 +29,7 @@ type WishlistEntry = {
   id: string;
   item_id: string;
   created_at?: string;
-  item: Item | null; // normalized to a single object (or null)
+  item: Item | null;
 };
 
 export default function WishlistScreen() {
@@ -47,7 +48,6 @@ export default function WishlistScreen() {
       item: Array.isArray(r.item) ? r.item[0] ?? null : r.item ?? null,
     }));
 
-  // Load wishlist (server-filters out delisted items)
   const fetchWishlist = useCallback(async () => {
     setLoading(true);
     try {
@@ -61,8 +61,7 @@ export default function WishlistScreen() {
 
       const { data, error } = await supabase
         .from('wishlist')
-        .select(
-          `
+        .select(`
           id,
           item_id,
           created_at,
@@ -72,10 +71,8 @@ export default function WishlistScreen() {
             image_url,
             archived_at
           )
-        `
-        )
+        `)
         .eq('user_id', user.id)
-        // do not show delisted items in the wishlist list
         .is('item.archived_at', null)
         .order('created_at', { ascending: false });
 
@@ -100,51 +97,35 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }, [fetchWishlist]);
 
-  // Realtime: if wishlist rows change for this user, refresh
+  // Debounced bus refetch
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => fetchWishlist(), 200);
+  }, [fetchWishlist]);
+
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      channel = supabase
-        .channel('rt-wishlist-list')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'wishlist', filter: `user_id=eq.${user.id}` },
-          () => fetchWishlist()
-        )
-        .subscribe();
-    })();
-
+    const offA = on('wishlist:changed', scheduleRefetch);
+    const offB = on('items:changed', scheduleRefetch);
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      offA();
+      offB();
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
     };
-  }, [fetchWishlist]);
+  }, [scheduleRefetch]);
 
-  // Cross-platform bus: refetch when other screens change wishlist
-  useEffect(() => {
-    const off = on('wishlist:changed', fetchWishlist);
-    return off;
-  }, [fetchWishlist]);
-
-  // Remove entry and notify other screens
   const removeFromWishlist = async (id: string) => {
     try {
       const { error } = await supabase.from('wishlist').delete().eq('id', id);
       if (error) throw error;
       setRows((prev) => prev.filter((r) => r.id !== id));
-      emit('wishlist:changed');
+      emit('wishlist:changed'); // keep other screens in sync
     } catch (e: any) {
       console.error('[Remove wishlist error]', e);
       Alert.alert('Remove failed', e?.message ?? 'Please try again.');
     }
   };
 
-  // Safe open: verify the item is still listed
   const openItem = useCallback(
     async (id: string) => {
       const { data, error } = await supabase
@@ -155,11 +136,9 @@ export default function WishlistScreen() {
 
       if (error || !data || data.archived_at) {
         Alert.alert('Item unavailable', 'This item is no longer listed.');
-        // Also remove it from the local list if present
         setRows((prev) => prev.filter((r) => r.item_id !== id));
         return;
       }
-
       router.push(`/product/${id}`);
     },
     [router]
@@ -177,6 +156,7 @@ export default function WishlistScreen() {
             source={{ uri: thumb || 'https://via.placeholder.com/300x400.png?text=No+Image' }}
             style={styles.thumb}
             resizeMode="cover"
+            accessibilityLabel={title}
           />
           <View style={styles.info}>
             <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
@@ -184,11 +164,18 @@ export default function WishlistScreen() {
             </Text>
 
             <View style={styles.actions}>
-              <TouchableOpacity onPress={() => openItem(item.item_id)}>
-                <Text style={[styles.link, { color: c.tint }]}>View Details</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
+              <FSButton
+                title="View Details"
+                variant="secondary"
+                size="sm"
+                block={false}
+                onPress={() => openItem(item.item_id)}
+              />
+              <FSButton
+                title="Remove"
+                variant="danger"
+                size="sm"
+                block={false}
                 onPress={async () => {
                   const ok = await confirm({
                     title: 'Remove from wishlist?',
@@ -199,9 +186,7 @@ export default function WishlistScreen() {
                   });
                   if (ok) await removeFromWishlist(item.id);
                 }}
-              >
-                <Text style={styles.remove}>Remove</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
@@ -209,26 +194,30 @@ export default function WishlistScreen() {
     );
   };
 
+  // ----- UI -----
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
-      <Text style={[styles.heading, { color: c.text }]}>Wishlist</Text>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <View style={[pageWrap(WEB_MAX_WIDTH), styles.container]}>
+        <Text style={[styles.heading, { color: c.text }]}>Wishlist</Text>
 
-      {loading ? (
-        <ActivityIndicator size="large" color={c.text} />
-      ) : rows.length === 0 ? (
-        <Text style={{ color: c.muted }}>No items in your wishlist yet.</Text>
-      ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(r) => r.id}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          refreshControl={
-            <RefreshControl tintColor={c.text} refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        {loading ? (
+          <ActivityIndicator size="large" color={c.text} />
+        ) : rows.length === 0 ? (
+          <Text style={{ color: c.muted }}>No items in your wishlist yet.</Text>
+        ) : (
+          <FlatList
+            data={rows}
+            keyExtractor={(r) => r.id}
+            renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            refreshControl={
+              <RefreshControl tintColor={c.text} refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[pageContent(WEB_MAX_WIDTH), { paddingBottom: 16 }]}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -236,19 +225,29 @@ export default function WishlistScreen() {
 const THUMB_W = 72;
 
 const styles = StyleSheet.create({
-  container: { padding: 20, flex: 1 },
+  container: { paddingVertical: 20, flex: 1 },
   heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-  card: { padding: 12, borderWidth: 1, borderRadius: 8 },
+
+  card: {
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
   row: { flexDirection: 'row', gap: 12 },
   thumb: {
     width: THUMB_W,
     height: THUMB_W * (4 / 3),
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#eee',
   },
   info: { flex: 1 },
-  title: { fontWeight: 'bold', marginBottom: 6, fontSize: 16 },
-  actions: { marginTop: 10, flexDirection: 'row', gap: 16, alignItems: 'center' },
-  link: { fontWeight: '500' },
-  remove: { color: '#FF3B30', fontWeight: '500' },
+  title: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 },
+
+  actions: {
+    marginTop: 4,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
 });

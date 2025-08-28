@@ -6,8 +6,8 @@ import { ColorSchemeName, useColorScheme } from 'react-native';
 type Scheme = 'light' | 'dark' | 'system';
 
 type ThemeContextValue = {
-  scheme: Scheme;                             // user choice
-  resolvedScheme: Exclude<ColorSchemeName, null>; // actual active scheme
+  scheme: Scheme;                               // user choice
+  resolvedScheme: Exclude<ColorSchemeName, null>; // active scheme in effect
   setScheme: (s: Scheme) => void;
 };
 
@@ -47,39 +47,51 @@ export function useTheme() {
   return ctx;
 }
 
+/* ------------------------------------------------------------------ */
+/* Colors 
+   Inspired by https://www.realtimecolors.com/?colors=e5ddee-0f0b15-bdaad4-663451-ac5b71
+   Goals:
+   - High contrast text on bg in both modes
+   - Consistent primary ("tint") across modes for brand
+   - Gentle neutrals for cards/borders; readable "muted"
+   - Keep existing keys so the rest of the app works unchanged
+/* ------------------------------------------------------------------ */
 
-// Warm raspberry primary (tint) + fresh teal accent.
-// Soft blush background in light; deep slate in dark.
 export const lightColors = {
-  bg: '#FFF7FA',       // soft blush
-  card: '#FFFFFF',
-  text: '#1F2937',     // slate-800
-  muted: '#6B7280',    // slate-500
-  border: '#E9D8E8',   // subtle lilac
-  tint: '#D74B76',     // raspberry primary
-  accent: '#2FB7A3',   // teal accent
-  success: '#22C55E',
-  warning: '#F59E0B',
-  danger:  '#EF4444',
-  overlay: 'rgba(0,0,0,0.06)',
+  bg:     '#F6F3FA', // soft lavender paper
+  card:   '#FFFFFF',
+  text:   '#0F0B15', // near-black ink
+  muted:  '#6E647D', // subdued copy / placeholders
+  border: '#E5E0EC', // subtle hairline
+  tint:   '#663451', // primary actions (white text on this)
+  accent: '#AC5B71', // secondary emphasis (links/badges)
+
+  // Status (kept close to your original semantics)
+  success: '#15803D',
+  warning: '#B45309',
+  danger:  '#B91C1C',
+
+  overlay: 'rgba(0,0,0,0.12)', // shadows/scrims on light
 };
 
 export const darkColors = {
-  bg: '#0F1115',
-  card: '#151821',
-  text: '#E5E7EB',
-  muted: '#9CA3AF',
-  border: '#2A2F3A',
-  tint: '#E06A93',     // raspberry (dark)
-  accent: '#43C6B2',   // teal (dark)
-  success: '#22C55E',
+  bg:     '#0F0B15', // deep eggplant
+  card:   '#16111F', // lifted surface
+  text:   '#E5DDEE', // lavender ink
+  muted:  '#BFB6CB', // desaturated copy
+  border: '#2B2236',
+  tint:   '#663451', // same brand primary
+  accent: '#BDAAD4', // gentle lavender accent
+
+  success: '#34D399',
   warning: '#F59E0B',
-  danger:  '#F87171',
-  overlay: 'rgba(0,0,0,0.35)',
+  danger:  '#EF4444',
+
+  overlay: 'rgba(0,0,0,0.45)', // deeper scrim for dark
 };
 
-
-export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
+/* Design tokens (unchanged API) */
+export const radius  = { sm: 8, md: 12, lg: 16, pill: 999 };
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 export const type = {
   titleXL: { size: 28, lineHeight: 34, weight: '700' as const },
@@ -94,7 +106,7 @@ export function useColors() {
   return resolvedScheme === 'dark' ? darkColors : lightColors;
 }
 
-/** Convenience booleans/actions for Settings page */
+/** Convenience for Settings page */
 export function useThemeMode() {
   const { scheme, resolvedScheme, setScheme } = useTheme();
   const isDark = resolvedScheme === 'dark';

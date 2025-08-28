@@ -2,7 +2,7 @@
 // Helpers for saving user push preferences (and later: device tokens)
 
 import * as Notifications from "expo-notifications";
-import { supabase } from "./supabase";
+import { supabase } from "../supabase";
 
 export async function requestPushPermission(): Promise<boolean> {
   const settings = await Notifications.getPermissionsAsync();

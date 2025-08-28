@@ -1,6 +1,7 @@
 // app/(drawer)/_layout.tsx
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import * as Updates from 'expo-updates';
 import React from 'react';
@@ -40,6 +41,7 @@ function CustomDrawerContent(props: any) {
 
 export default function DrawerLayout() {
   const c = useColors();
+  const router = useRouter();
 
   return (
     <Drawer
@@ -53,7 +55,7 @@ export default function DrawerLayout() {
         headerTitleStyle: { color: c.text },
         headerTintColor: c.text, // hamburger/back chevrons
 
-        // Theme-aware drawer colors 
+        // Theme-aware drawer colors
         drawerStyle: { backgroundColor: c.bg },
         drawerActiveTintColor: c.tint,
         drawerInactiveTintColor: c.muted,
@@ -64,8 +66,31 @@ export default function DrawerLayout() {
       }}
       drawerContent={(p) => <CustomDrawerContent {...p} />}
     >
-      <Drawer.Screen name="(tabs)" options={{ title: 'Home' }} />
-      <Drawer.Screen name="myitems" options={{ title: 'My Listed Items' }} />
+      {/* Ensure selecting "Home" goes to the /home tab  */}
+      <Drawer.Screen
+        name="(tabs)"
+        options={{ title: 'Home' }}
+        listeners={({ navigation }) => ({
+          drawerItemPress: (e) => {
+            e.preventDefault();
+            router.navigate('/home');
+            navigation.closeDrawer();
+          },
+        })}
+      />
+
+      {/* Listed items; default drawer routing works, but we also close the drawer explicitly */}
+      <Drawer.Screen
+        name="myitems"
+        options={{ title: 'My Listed Items' }}
+        listeners={({ navigation }) => ({
+          drawerItemPress: (e) => {
+            e.preventDefault();
+            router.navigate('/myitems');
+            navigation.closeDrawer();
+          },
+        })}
+      />
     </Drawer>
   );
 }

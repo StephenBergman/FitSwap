@@ -2,8 +2,9 @@
 // Works on web + iOS/Android (Hermes) without polyfills.
 
 export type Events =
-  | 'items:changed'      // e.g. after delisting
-  | 'wishlist:changed';  // e.g. after toggling wishlist
+  | 'items:changed'       // e.g. after delisting
+  | 'wishlist:changed'    // e.g. after toggling wishlist
+  | 'swaps:changed';      
 
 type Handler = () => void;
 

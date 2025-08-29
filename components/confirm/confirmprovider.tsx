@@ -15,13 +15,19 @@ import {
   View,
 } from 'react-native';
 import { useColors } from '../../lib/theme';
+import FSButton from '../buttons/FSButton';
 
+/**
+ * Options the caller can pass when requesting confirmation.
+ * confirmVariant is optional and lets the caller override the confirm button styling.
+ */
 export type ConfirmOptions = {
   title?: string;
   message?: string;
   confirmText?: string;
   cancelText?: string;
-  destructive?: boolean;
+  destructive?: boolean; // if true, confirm button uses "danger" styling
+  confirmVariant?: 'primary' | 'secondary' | 'success' | 'danger';
 };
 
 type ConfirmFn = (opts?: ConfirmOptions) => Promise<boolean>;
@@ -29,7 +35,7 @@ type ConfirmContextValue = { confirm: ConfirmFn };
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
-const DEFAULTS: Required<ConfirmOptions> = {
+const DEFAULTS: Required<Omit<ConfirmOptions, 'confirmVariant'>> = {
   title: 'Are you sure?',
   message: '',
   confirmText: 'OK',
@@ -43,6 +49,7 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
   const [opts, setOpts] = useState<ConfirmOptions>(DEFAULTS);
   const resolverRef = useRef<((v: boolean) => void) | null>(null);
 
+  // Open the dialog and return a promise that resolves with the user's choice.
   const confirm: ConfirmFn = (options) =>
     new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
@@ -50,6 +57,7 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
       setVisible(true);
     });
 
+  // Resolve the pending promise and close the dialog.
   const resolveAndClose = (value: boolean) => {
     setVisible(false);
     const r = resolverRef.current;
@@ -57,7 +65,7 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
     r?.(value);
   };
 
-  // Android back button
+  // Android hardware back closes the dialog like "Cancel".
   useEffect(() => {
     if (!visible || Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -67,7 +75,7 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
     return () => sub.remove();
   }, [visible]);
 
-  // Esc to close on web
+  // Esc key on web closes the dialog like "Cancel".
   useEffect(() => {
     if (Platform.OS !== 'web' || !visible) return;
     const onKey = (e: KeyboardEvent) => {
@@ -77,18 +85,24 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
     return () => window.removeEventListener('keydown', onKey);
   }, [visible]);
 
+  // Choose the confirm button variant.
+  const confirmVariant =
+    opts.confirmVariant ?? (opts.destructive ? 'danger' : 'success');
+
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
 
-      {/* Absolute overlay instead of <Modal/> to avoid Android layout glitches */}
+      {/* Overlay instead of <Modal/> to avoid Android layout glitches */}
       {visible && (
         <View style={styles.portalRoot} pointerEvents="box-none" collapsable={false}>
+          {/* Click outside to cancel */}
           <Pressable
             style={styles.backdrop}
             onPress={() => resolveAndClose(false)}
             android_ripple={{ color: 'rgba(255,255,255,0.05)', borderless: true }}
           />
+
           <View
             style={[styles.sheet, { backgroundColor: c.card, borderColor: c.border }]}
             accessibilityRole="alert"
@@ -103,38 +117,20 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
             )}
 
             <View style={styles.row}>
-              <Pressable
+              <FSButton
+                title={opts.cancelText ?? 'Cancel'}
+                variant="secondary"
+                size="sm"
                 onPress={() => resolveAndClose(false)}
-                style={({ pressed }) => [
-                  styles.btn,
-                  { backgroundColor: pressed ? c.border : 'transparent' },
-                ]}
-                android_ripple={{ color: c.border }}
-              >
-                <Text style={[styles.btnText, { color: c.text }]}>{opts.cancelText}</Text>
-              </Pressable>
-
-              <Pressable
+                block={false}
+              />
+              <FSButton
+                title={opts.confirmText ?? 'OK'}
+                variant={confirmVariant}
+                size="sm"
                 onPress={() => resolveAndClose(true)}
-                style={({ pressed }) => [
-                  styles.btn,
-                  {
-                    backgroundColor: pressed ? (opts.destructive ? '#ffebeb' : c.border) : 'transparent',
-                    borderColor: opts.destructive ? '#FF3B30' : c.tint,
-                    borderWidth: 1,
-                  },
-                ]}
-                android_ripple={{ color: opts.destructive ? '#ffe2e2' : c.border }}
-              >
-                <Text
-                  style={[
-                    styles.btnText,
-                    { color: opts.destructive ? '#FF3B30' : c.tint, fontWeight: '600' },
-                  ]}
-                >
-                  {opts.confirmText}
-                </Text>
-              </Pressable>
+                block={false}
+              />
             </View>
           </View>
         </View>
@@ -143,11 +139,15 @@ export function ConfirmProvider({ children }: PropsWithChildren) {
   );
 }
 
+/**
+ * Hook used by callers to open the confirm dialog.
+ * It falls back to the native Alert/confirm if the provider isn't mounted.
+ */
 export function useConfirm(): ConfirmFn {
   const ctx = useContext(ConfirmContext);
   if (ctx) return ctx.confirm;
 
-  // Fallback if provider isn’t mounted yet
+  // Fallback path so callers can still confirm even if the provider isn't on screen yet.
   return async (o?: ConfirmOptions) => {
     const options = { ...DEFAULTS, ...(o ?? {}) };
     if (Platform.OS === 'web') {
@@ -175,7 +175,7 @@ export function useConfirm(): ConfirmFn {
 }
 
 const styles = StyleSheet.create({
-  // full-screen overlay above the app
+  // Full-screen overlay container
   portalRoot: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -210,10 +210,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
     justifyContent: 'flex-end',
   },
-  btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  btnText: { fontSize: 15 },
 });

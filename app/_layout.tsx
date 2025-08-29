@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Image as RNImage, Text as RNText, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConfirmProvider } from '../components/confirm/confirmprovider';
@@ -30,10 +30,7 @@ function Shell() {
         <View style={{ flex: 1, backgroundColor: c.bg }}>
           <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} backgroundColor={c.bg} />
 
-          {/* Single, top-level Stack controls ALL headers/titles.
-             Any nested group layouts (e.g. app/product/_layout.tsx, app/swaps/_layout.tsx)
-             should render only <Slot /> (no nested <Stack>) OR set headerShown:false
-             so we avoid double headers and lowercase segment titles. */}
+          {/* Single, top-level Stack controls ALL headers/titles. */}
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: c.card },
@@ -46,15 +43,32 @@ function Shell() {
               animation: 'default',
             }}
           >
-            {/* Nested drawer/tab layout manages its own UI; hide its header here */}
+            {/* Drawer/tab layout manages its own header; hide this one */}
             <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
             <Stack.Screen name="auth/login" options={{ title: 'Log in', presentation: 'card' }} />
             <Stack.Screen name="auth/register" options={{ title: 'Create account', presentation: 'card' }} />
             <Stack.Screen name="product/[ProductId]" options={{ title: 'Item', presentation: 'card' }} />
             <Stack.Screen name="swaps/[Id]" options={{ title: 'Swap', presentation: 'card' }} />
             <Stack.Screen name="profile/[Id]" options={{ title: 'Edit Profile', presentation: 'card' }} />
-            <Stack.Screen name="(tabs)/profile" options={{ title: 'Profile', presentation: 'card' }} />
-            {/* Any other routes inherit the screenOptions above */}
+            <Stack.Screen
+              name="offer/offerscreen"
+              options={{
+                title: '',
+                presentation: 'card',
+                headerTitle: ({ children, tintColor }) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <RNImage
+                      source={require('../assets/images/FitswapLogo.png')}
+                      style={{ width: 72, height: 72, marginRight: 8 }}
+                      resizeMode="contain"
+                    />
+                    <RNText style={{ color: tintColor, fontSize: 20, fontWeight: '700' }}>
+                      {children}
+                    </RNText>
+                  </View>
+                ),
+              }}
+            />
           </Stack>
         </View>
       </ToastProvider>
@@ -80,13 +94,13 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <ConfirmProvider>
-        <NotificationsProvider>
-          <DevProvider user={user}>
+        <DevProvider user={user}>
+          <NotificationsProvider>
             <RealtimeProvider>
               <Shell />
             </RealtimeProvider>
-          </DevProvider>
-        </NotificationsProvider>
+          </NotificationsProvider>
+        </DevProvider>
       </ConfirmProvider>
     </ThemeProvider>
   );

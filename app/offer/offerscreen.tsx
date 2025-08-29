@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useToast } from '../../components/toast/ToastProvider';
 import { supabase } from '../../lib/supabase';
 import { useColors } from '../../lib/theme';
 
@@ -22,6 +22,7 @@ export default function OfferScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>(); // requested item id
   const router = useRouter();
   const c = useColors();
+  const toast = useToast();
 
   const [receiverId, setReceiverId] = useState<string | null>(null);
   const [myItems, setMyItems] = useState<ItemRow[]>([]);
@@ -53,7 +54,7 @@ export default function OfferScreen() {
         } = await supabase.auth.getUser();
         if (authErr) throw authErr;
         if (!user?.id) {
-          Alert.alert('Not signed in', 'Please sign in to send an offer.');
+          toast({ message: 'Please sign in to send an offer.' });
           return;
         }
 
@@ -67,21 +68,19 @@ export default function OfferScreen() {
         setMyItems((mine ?? []) as ItemRow[]);
       } catch (e: any) {
         console.error('[Offer load error]', e);
-        Alert.alert('Error', e.message ?? 'Failed to prepare offer screen.');
+        toast({ message: e?.message ?? 'Failed to prepare offer screen.' });
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [id]);
+  }, [id, toast]);
 
-  const canSubmit = useMemo(() => !!id && !!receiverId && !!selectedId && !submitting, [
-    id,
-    receiverId,
-    selectedId,
-    submitting,
-  ]);
+  const canSubmit = useMemo(
+    () => !!id && !!receiverId && !!selectedId && !submitting,
+    [id, receiverId, selectedId, submitting]
+  );
 
   const submitOffer = useCallback(async () => {
     if (!canSubmit) return;
@@ -94,19 +93,19 @@ export default function OfferScreen() {
         error: authErr,
       } = await supabase.auth.getUser();
       if (authErr || !user?.id) {
-        Alert.alert('Error', 'You must be logged in to send an offer.');
+        toast({ message: 'You must be logged in to send an offer.' });
         return;
       }
 
       if (receiverId === user.id) {
-        Alert.alert('Heads up', 'You cannot send an offer on your own item.');
+        toast({ message: 'You can’t send an offer on your own item.' });
         return;
       }
 
       const { error } = await supabase.from('swaps').insert({
         sender_id: user.id,
         receiver_id: receiverId,
-        item_id: id,            // requested item (theirs)
+        item_id: id, // requested item (theirs)
         offered_item_id: selectedId, // the one I picked
         message,
         status: 'pending',
@@ -114,15 +113,15 @@ export default function OfferScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Offer sent', 'Your swap request was submitted.');
-      router.replace('/(tabs)/myswaps'); 
+      toast({ message: 'Offer sent!' });
+      router.replace('/(tabs)/myswaps');
     } catch (e: any) {
       console.error('[Submit offer error]', e);
-      Alert.alert('Error', e.message ?? 'Failed to submit offer.');
+      toast({ message: e?.message ?? 'Failed to submit offer.' });
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, id, message, receiverId, router, selectedId]);
+  }, [canSubmit, id, message, receiverId, router, selectedId, toast]);
 
   if (loading) {
     return (
@@ -258,7 +257,7 @@ const styles = StyleSheet.create({
 
   pickImageBox: {
     width: '100%',
-    height: CARD_H - 58,       // image area height
+    height: CARD_H - 58,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',

@@ -1,13 +1,16 @@
 // app/(drawer)/_layout.tsx
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import * as Updates from 'expo-updates';
-import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus, Image, StyleSheet, Text, View } from 'react-native';
+import { useNotifications } from '../../components/notifications/context';
 import NotificationsBell from '../../components/notifications/NotificationsBell';
 import ProfileButton from '../../components/profile/ProfileButton';
+import { on } from '../../lib/eventBus';
 import { useColors } from '../../lib/theme';
 
 function VersionFooter() {
@@ -46,14 +49,15 @@ function HeaderLogo() {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Image
-        // path: client/assets/images/FitswapLogo.png
         source={require('../../assets/images/FitswapLogo.png')}
-        style={{ width: 28, height: 28 }}
+        style={{ width: 72, height: 72 }}
         resizeMode="contain"
         accessible
         accessibilityLabel="FitSwap"
       />
-      <Text style={{ color: c.text, fontWeight: '800', fontSize: 20 }}>FitSwap</Text>
+      <Text style={{ color: c.text, fontWeight: '800', fontSize: 20 }}>
+        {/* Place Text Here (Header title for all pages if I want it later. For now just logo. */}{' '}
+      </Text>
     </View>
   );
 }
@@ -61,6 +65,45 @@ function HeaderLogo() {
 export default function DrawerLayout() {
   const c = useColors();
   const router = useRouter();
+
+  // Just call refresh; badge and panel read from context
+  const { refresh } = useNotifications();
+
+  // 1) Update when RealtimeProvider emits the event-bus signal
+  useEffect(() => {
+    const off = on('notifications:changed', () => {
+      refresh();
+      // tiny follow-up re-check to dodge replica lag
+      setTimeout(refresh, 900);
+    });
+    return off;
+  }, [refresh]);
+
+  // 2) Refresh whenever this navigator regains focus,
+  //    and do a light poll while focused (15s)
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      refresh();
+      const id = setInterval(() => !cancelled && refresh(), 15000);
+      return () => {
+        cancelled = true;
+        clearInterval(id);
+      };
+    }, [refresh])
+  );
+
+  // 3) Also refresh when app returns to foreground
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (appState.current.match(/inactive|background/) && next === 'active') {
+        refresh();
+      }
+      appState.current = next;
+    });
+    return () => sub.remove();
+  }, [refresh]);
 
   return (
     <Drawer

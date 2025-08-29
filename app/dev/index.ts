@@ -1,3 +1,3 @@
-export { DevProvider, useDev } from './devcontext';
-export { canShowDevUI } from './devgate';
+export { DevProvider, useDev } from '../../components/dev/devcontext';
+export { canShowDevUI } from '../../components/dev/devgate';
 

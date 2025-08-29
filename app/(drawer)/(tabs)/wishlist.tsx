@@ -42,6 +42,11 @@ export default function WishlistScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  const visibleRows = React.useMemo(
+  () => rows.filter(r => r.item && !r.item.archived_at),
+  [rows]
+);
+
   const normalize = (data: any[]): WishlistEntry[] =>
     (data ?? []).map((r) => ({
       id: r.id,
@@ -220,7 +225,7 @@ export default function WishlistScreen() {
           <Text style={{ color: c.muted }}>No items in your wishlist yet.</Text>
         ) : (
           <FlatList
-            data={rows}
+            data={visibleRows}
             keyExtractor={(r) => r.id}
             renderItem={renderItem}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}

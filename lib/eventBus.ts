@@ -5,7 +5,8 @@ export type Events =
   | 'items:changed'      // e.g. after delisting
   | 'wishlist:changed'   // e.g. after toggling wishlist
   | 'swaps:changed'
-  | 'profile:changed';   // e.g. after avatar/name/bio update
+  | 'profile:changed'   // e.g. after avatar/name/bio update
+  | 'notifications:changed';
 
 type Handler = () => void;
 

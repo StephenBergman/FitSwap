@@ -83,14 +83,20 @@ export const darkColors = {
   tint:   '#663451', // same brand primary
   accent: '#BDAAD4', // gentle lavender accent
 
-  success: '#34D399',
+  success: '#0F4D2E',
   warning: '#F59E0B',
   danger:  '#EF4444',
 
   overlay: 'rgba(0,0,0,0.45)', // deeper scrim for dark
 };
 
-/* Design tokens (unchanged API) */
+export const tokens = {
+  successBase:    '#15803D',  
+  // warningBase: '#B45309',
+  // dangerBase:  '#B91C1C',
+};
+
+
 export const radius  = { sm: 8, md: 12, lg: 16, pill: 999 };
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 export const type = {

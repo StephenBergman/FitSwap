@@ -3,13 +3,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, StyleSheet, Switch, Text, View } from 'react-native';
+
 import FSButton from '../../../components/buttons/FSButton';
+import { StatusPill } from '../../../components/buttons/StatusPill';
+
 import { useConfirm } from '../../../components/confirm/confirmprovider';
 import { useToast } from '../../../components/toast/ToastProvider';
 import { on } from '../../../lib/eventBus';
 import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../../lib/layout';
 import { supabase } from '../../../lib/supabase';
-import { radius, spacing, type as tt, useColors, useTheme } from '../../../lib/theme';
+import { radius, spacing, type as tt, useColors } from '../../../lib/theme';
 
 type VUserSwap = {
   id: string;
@@ -42,40 +45,19 @@ type JoinedSwap = {
   requested?: any;
 };
 
-function StatusPill({ status }: { status: VUserSwap['status'] }) {
-  const c = useColors();
-  const { resolvedScheme } = useTheme();
-  const palette = {
-    pending:  { fg: c.warning, bg: resolvedScheme === 'dark' ? 'rgba(245,158,11,0.22)' : 'rgba(245,158,11,0.12)' },
-    accepted: { fg: c.success, bg: resolvedScheme === 'dark' ? 'rgba(34,197,94,0.22)'  : 'rgba(34,197,94,0.14)'  },
-    declined: { fg: c.danger,  bg: resolvedScheme === 'dark' ? 'rgba(239,68,68,0.22)'  : 'rgba(239,68,68,0.14)'  },
-    canceled: { fg: c.muted,   bg: resolvedScheme === 'dark' ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.12)' },
-  } as const;
-  const s = palette[status];
-  return (
-    <View style={[pillStyles.pill, { backgroundColor: s.bg }]}>
-      <Text style={[pillStyles.pillText, { color: s.fg }]}>{status}</Text>
-    </View>
-  );
-}
-const pillStyles = StyleSheet.create({
-  pill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill },
-  pillText: { fontWeight: '700', textTransform: 'capitalize' as const, fontSize: tt.cap.size, lineHeight: tt.cap.lineHeight },
-});
-
 export default function MySwapsScreen() {
   const c = useColors();
   const confirmDlg = useConfirm();
-  const toast = useToast(); 
+  const toast = useToast();
   const [includeSelf, setIncludeSelf] = useState<boolean>(__DEV__);
   const [swaps, setSwaps] = useState<VUserSwap[]>([]);
   const [tab, setTab] = useState<'sent' | 'received'>('received');
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false); // ensures we know when auth is resolved
+  const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
 
-  // Resolve user 
+  // Resolve user
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -92,7 +74,7 @@ export default function MySwapsScreen() {
     return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, []);
 
-  // Core fetch 
+  // Core fetch
   const loadSwaps = useCallback(async () => {
     if (!authReady || !userId) { setSwaps([]); return; }
 
@@ -184,20 +166,19 @@ export default function MySwapsScreen() {
   // Initial + user change
   useEffect(() => { loadSwaps(); }, [loadSwaps]);
 
-  // Refresh when screen regains focus (native)
+  // Refresh when screen regains focus
   useFocusEffect(useCallback(() => {
     loadSwaps();
     return () => {};
   }, [loadSwaps]));
 
-  // Debounced refetch used by realtime events
+  // Debounced refetch via realtime events
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
     refetchTimer.current = setTimeout(() => { loadSwaps(); }, 200);
   }, [loadSwaps]);
 
-  // reacts to global invalidation fired by the RealtimeProvider.
   useEffect(() => {
     const off = on('swaps:changed', scheduleRefetch);
     return () => {
@@ -244,12 +225,12 @@ export default function MySwapsScreen() {
         .select('id')
         .single();
       if (error || !data) throw error ?? new Error('No update returned');
-      toast({ message: 'Swap accepted' }); // <-- toast on success
+      toast({ message: 'Swap accepted' });
     } catch (e: any) {
       patchLocal(row.id, 'pending');
       Alert.alert('Confirm failed', e?.message ?? 'Please try again.');
     }
-  }, [confirmDlg, patchLocal, userId, toast]); 
+  }, [confirmDlg, patchLocal, userId, toast]);
 
   const denySwap = useCallback(async (row: VUserSwap) => {
     if (!userId) return;
@@ -272,12 +253,12 @@ export default function MySwapsScreen() {
         .select('id')
         .single();
       if (error || !data) throw error ?? new Error('No update returned');
-      toast({ message: 'Swap denied' }); // <-- toast on success
+      toast({ message: 'Swap denied' });
     } catch (e: any) {
       patchLocal(row.id, 'pending');
       Alert.alert('Deny failed', e?.message ?? 'Please try again.');
     }
-  }, [confirmDlg, patchLocal, userId, toast]); 
+  }, [confirmDlg, patchLocal, userId, toast]);
 
   const cancelSwap = useCallback(async (row: VUserSwap) => {
     if (!userId) return;
@@ -332,8 +313,10 @@ export default function MySwapsScreen() {
 
             <View style={{ height: spacing.xs }} />
 
-            <Text style={[styles.label, { color: c.muted }]}>Status</Text>
+            <View style={styles.statusRow}>
+              <Text style={[styles.label, { color: c.muted, marginRight: 6 }]}>Status:</Text>
             <StatusPill status={item.status} />
+            </View>
 
             {!!item.message && (
               <>
@@ -354,8 +337,7 @@ export default function MySwapsScreen() {
 
               {pending && isReceiver && (
                 <>
-                  <FSButton title="Confirm" variant="success" size="sm" block={false} onPress={() => confirmSwap(item)}/>
-    
+                  <FSButton title="Confirm" variant="success" size="sm" block={false} onPress={() => confirmSwap(item)} />
                   <FSButton title="Deny" variant="danger" size="sm" block={false} onPress={() => denySwap(item)} />
                 </>
               )}
@@ -417,6 +399,8 @@ export default function MySwapsScreen() {
 
 const THUMB_W = 56;
 const styles = StyleSheet.create({
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
+
   outer: { flex: 1 },
   container: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   heading: { fontSize: tt.title.size, lineHeight: tt.title.lineHeight, fontWeight: tt.title.weight, marginBottom: spacing.sm },

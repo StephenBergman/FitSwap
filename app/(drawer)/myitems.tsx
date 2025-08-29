@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import FSButton from '../../components/buttons/FSButton';
+import { StatusPill } from '../../components/buttons/StatusPill';
 import { useConfirm } from '../../components/confirm/confirmprovider';
 import { emit, on } from '../../lib/eventBus';
 import { pageContent, pageWrap, WEB_MAX_WIDTH } from '../../lib/layout';
@@ -146,7 +147,7 @@ export default function MyItemsScreen() {
           .update({ archived_at: nowISO })
           .eq('id', id)
           .eq('user_id', uid)
-          .is('archived_at', null) // no-op if already delisted elsewhere
+          .is('archived_at', null)
           .select('id')
           .maybeSingle();
 
@@ -154,7 +155,7 @@ export default function MyItemsScreen() {
 
         emit('items:changed'); // notify other screens
       } catch (e: any) {
-        // rollback to actual previous value
+        // rollback
         setItems((prev) => prev.map((r) => (r.id === id ? { ...r, archived_at: prevArchived } : r)));
         Alert.alert('Could not delist', e?.message ?? 'Please try again.');
       }
@@ -187,7 +188,7 @@ export default function MyItemsScreen() {
           .update({ archived_at: null })
           .eq('id', id)
           .eq('user_id', uid)
-          .not('archived_at', 'is', null) // only if currently delisted
+          .not('archived_at', 'is', null)
           .select('id')
           .maybeSingle();
 
@@ -195,7 +196,7 @@ export default function MyItemsScreen() {
 
         emit('items:changed');
       } catch (e: any) {
-        // rollback to actual previous value
+        // rollback
         setItems((prev) => prev.map((r) => (r.id === id ? { ...r, archived_at: prevArchived } : r)));
         Alert.alert('Could not relist', e?.message ?? 'Please try again.');
       }
@@ -230,17 +231,19 @@ export default function MyItemsScreen() {
             </Text>
 
             {pending && !archived && (
-              <View style={[styles.badge, { borderColor: c.border, backgroundColor: c.bg }]}>
-                <Text style={[styles.badgeText, { color: c.warning }]}>Pending offers</Text>
-              </View>
+              <StatusPill
+                status="pending"
+                label="Pending offers"
+                style={{ marginTop: 6 }}
+              />
             )}
+
             {archived && (
-              <View style={[styles.badge, { borderColor: c.border, backgroundColor: c.bg }]}>
-                <Text style={[styles.badgeText, { color: c.muted }]}>
-                  Delisted
-                  {item.archived_at ? ` • ${new Date(item.archived_at).toLocaleDateString()}` : ''}
-                </Text>
-              </View>
+              <StatusPill
+                status="canceled"
+                label={`Delisted${item.archived_at ? ` • ${new Date(item.archived_at).toLocaleDateString()}` : ''}`}
+                style={{ marginTop: 6 }}
+              />
             )}
 
             {!archived ? (
@@ -334,14 +337,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   thumb: { width: THUMB_W, height: THUMB_W * (4 / 3), borderRadius: 8 },
   title: { fontSize: 16, fontWeight: '600' },
-
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    marginTop: 6,
-  },
-  badgeText: { fontSize: 12, fontWeight: '600' },
 });

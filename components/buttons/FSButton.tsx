@@ -63,7 +63,7 @@ const styles = (
 
       // background by variant
       backgroundColor:
-        v === 'success'   ? '#15803D' : 
+        v === 'success'   ? c.success  : 
         v === 'danger'    ? c.danger   :
         v === 'primary'   ? c.tint     :
         'transparent',

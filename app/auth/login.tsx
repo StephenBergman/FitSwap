@@ -5,6 +5,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image as RNImage,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,13 +46,22 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scroll,
-          pageContent(WEB_NARROW, true), // center + gutters on web
+          pageContent(WEB_NARROW, true),
         ]}
         keyboardShouldPersistTaps="handled"
       >
         {/* Centered card (web gets max width, native just gets padding) */}
         <View style={[pageWrap(WEB_NARROW, true), styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[styles.title, { color: c.text }]}>Log in to FitSwap</Text>
+          {/* Inline logo + title */}
+          <View style={styles.titleRow}>
+            <RNImage
+              source={require('../../assets/images/FitswapLogo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
+            <Text style={[styles.title, { color: c.text }]}>Log in to FitSwap</Text>
+          </View>
 
           <FSInput
             placeholder="Email"
@@ -66,7 +76,6 @@ export default function LoginScreen() {
           />
 
           <FSInput
-            // key swap keeps Android masking correct when toggling
             key={showPw ? 'pw-text' : 'pw-secure'}
             placeholder="Password"
             autoCapitalize="none"
@@ -106,27 +115,38 @@ const makeStyles = (c: ReturnType<typeof useColors>) =>
   StyleSheet.create({
     // Vertical centering for tall screens; still scrolls on small ones
     scroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 32 },
-    // Card wrapper matches app theme and keeps form at a comfortable reading width
+
+    // Card wrapper
     card: {
       width: '100%',
       borderWidth: 1,
       borderRadius: 14,
       padding: 20,
       gap: 14,
-      // light shadow on native; browser handles nicely with border only
       shadowColor: '#000',
       shadowOpacity: 0.06,
       shadowOffset: { width: 0, height: 2 },
       shadowRadius: 6,
       elevation: 2,
     },
+
+    // Inline header row
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center', 
+      gap: 10,
+      marginBottom: 4,
+    },
+    logo: { width: 72, height: 72 }, 
+
     title: {
       fontSize: 28,
-      marginBottom: 8,
       fontWeight: '800',
       letterSpacing: 0.2,
-      textAlign: 'center',
+      
     },
+
     link: {
       marginTop: 8,
       fontSize: 16,

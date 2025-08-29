@@ -26,11 +26,11 @@ export default function TabLayout() {
         },
       })}
     >
-      <Tabs.Screen name="home" options={{ title: 'Home', tabBarLabel: 'home' }} />
-      <Tabs.Screen name="wishlist" options={{ title: 'Wishlist', tabBarLabel: 'wishlist' }} />
-      <Tabs.Screen name="swap" options={{ title: 'Swap', tabBarLabel: 'swap' }} />
+      <Tabs.Screen name="home" options={{ title: 'Home', tabBarLabel: 'Home' }} />
+      <Tabs.Screen name="wishlist" options={{ title: 'Wishlist', tabBarLabel: 'Wishlist' }} />
+      <Tabs.Screen name="swap" options={{ title: 'Swap', tabBarLabel: 'Swap' }} />
       <Tabs.Screen name="myswaps" options={{ title: 'My Swaps', tabBarLabel: 'My Swaps' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarLabel: 'profile' }} /> 
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarLabel: 'Profile' }} /> 
       
     </Tabs>
   );
